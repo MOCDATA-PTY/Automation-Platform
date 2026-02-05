@@ -1,6 +1,7 @@
 """
-Standalone turnover sync script - pulls new FW_ files from OneDrive and upserts to PostgreSQL.
-Run manually or via cron. Deletes FW_ files after successful sync.
+Standalone turnover sync script - pulls all Excel files from OneDrive and upserts to PostgreSQL.
+Processes all .xlsx/.xls files in the root folder, skips year subfolders.
+Deletes processed files after successful sync.
 
 Usage: python3 sync_turnover.py
 """
@@ -168,19 +169,23 @@ def main():
     if response.status_code != 200:
         log(f"ERROR: Failed to list folder: {response.status_code}")
         return
-    all_files = [f for f in response.json().get('value', []) if 'file' in f]
-    fw_files = [f for f in all_files if f['name'].startswith('FW')]
+    all_items = response.json().get('value', [])
+    # Get all Excel files in the root folder (exclude subfolders like year folders)
+    excel_files = [
+        f for f in all_items
+        if 'file' in f and f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
 
-    if not fw_files:
-        log("No new FW_ files found. Nothing to do.")
+    if not excel_files:
+        log("No Excel files found. Nothing to do.")
         return
 
-    log(f"Found {len(fw_files)} FW_ files")
+    log(f"Found {len(excel_files)} Excel files to process")
 
     # Process each file
     all_rows = []
     processed_ids = []
-    for file_info in fw_files:
+    for file_info in excel_files:
         branch = get_branch_from_fw(file_info['name'])
         if not branch:
             log(f"  SKIP (no branch): {file_info['name']}")
@@ -238,12 +243,12 @@ def main():
 
     log(f"DB: {before} -> {after} rows (+{after - before} new)")
 
-    # Delete processed FW_ files from OneDrive
+    # Delete processed Excel files from OneDrive
     deleted = 0
     for fid in processed_ids:
         if delete_file(token, fid):
             deleted += 1
-    log(f"Deleted {deleted}/{len(processed_ids)} FW_ files from OneDrive")
+    log(f"Deleted {deleted}/{len(processed_ids)} Excel files from OneDrive")
     log("=== Sync complete ===\n")
 
 
