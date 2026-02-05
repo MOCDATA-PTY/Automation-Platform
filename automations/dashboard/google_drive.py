@@ -15,13 +15,13 @@ from googleapiclient.http import MediaIoBaseDownload
 
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 PROGRESS_FILE = '/tmp/sync_progress.json'
-LAST_SYNC_FILE = '/tmp/last_sync.json'
+# Use settings.LAST_SYNC_FILE for consistency with onedrive_sync
 
 
 def save_last_sync(rows_count):
     """Save the last sync timestamp"""
     now = datetime.now()
-    with open(LAST_SYNC_FILE, 'w') as f:
+    with open(settings.LAST_SYNC_FILE, 'w') as f:
         json.dump({
             'timestamp': now.isoformat(),
             'time': now.strftime('%H:%M'),
@@ -33,8 +33,17 @@ def save_last_sync(rows_count):
 def get_last_sync():
     """Get the last sync info"""
     try:
-        with open(LAST_SYNC_FILE, 'r') as f:
-            return json.load(f)
+        with open(settings.LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            # Handle both old format (with 'last_sync' key) and new format (with time/date keys)
+            if 'last_sync' in data:
+                # OneDrive sync format - convert to display format
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
     except:
         return None
 
