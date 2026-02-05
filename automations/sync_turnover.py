@@ -170,10 +170,12 @@ def main():
         log(f"ERROR: Failed to list folder: {response.status_code}")
         return
     all_items = response.json().get('value', [])
-    # Get all Excel files in the root folder (exclude subfolders like year folders)
+    # Get all Excel files in the root folder, skip historical year archives (20XX_*.xlsx)
     excel_files = [
         f for f in all_items
-        if 'file' in f and f['name'].lower().endswith(('.xlsx', '.xls'))
+        if 'file' in f
+        and f['name'].lower().endswith(('.xlsx', '.xls'))
+        and not re.match(r'^20\d{2}_', f['name'])  # Skip 2020_ATL.xlsx, 2021_HNL.xlsx, etc.
     ]
 
     if not excel_files:

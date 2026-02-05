@@ -331,12 +331,13 @@ def sync_turnover_data():
                     OR EXCLUDED.report_date >= turnover_data.report_date
             """
             execute_values(cur, query, all_rows)
-
-        # Save last sync time
-        last_sync = {'last_sync': datetime.now().isoformat()}
-        with open(settings.LAST_SYNC_FILE, 'w') as f:
-            json.dump(last_sync, f)
-
         print(f"\n✓ Total: {len(all_rows)} records processed")
+    else:
+        print(f"\n✓ No new files to sync")
+
+    # Always save last sync time (even if no new records)
+    last_sync = {'last_sync': datetime.now().isoformat()}
+    with open(settings.LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
 
     return len(all_rows)

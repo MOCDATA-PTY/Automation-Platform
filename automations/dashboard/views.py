@@ -130,9 +130,12 @@ def sync_data(request):
 
         def run_sync():
             try:
-                update_progress('syncing', 'Syncing files from OneDrive...', 10, 100)
+                update_progress('syncing', 'Checking OneDrive for new files...', 10, 100)
                 count = onedrive_sync.sync_turnover_data()
-                update_progress('complete', f'Synced {count} records', 100, 100)
+                if count > 0:
+                    update_progress('complete', f'Synced {count} new records', 100, 100)
+                else:
+                    update_progress('complete', 'No new files to sync — all up to date', 100, 100)
             except Exception as e:
                 update_progress('error', f'Error: {str(e)}', 0, 100)
 
