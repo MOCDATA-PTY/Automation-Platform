@@ -300,8 +300,12 @@ def sync_turnover_data():
     folder_path = settings.ONEDRIVE_FOLDER_PATH
     files = list_files_in_folder(folder_path)
 
-    # Filter Excel files
-    excel_files = [f for f in files if f['name'].lower().endswith(('.xlsx', '.xls'))]
+    # Filter Excel files, skip historical year archives (20XX_*.xlsx)
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+        and not re.match(r'^20\d{2}_', f['name'])  # Skip 2020_ATL.xlsx, 2021_HNL.xlsx, etc.
+    ]
 
     all_rows = []
 
