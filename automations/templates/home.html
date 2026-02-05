@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - MOC Automations{% endblock %}
+
+{% block extra_styles %}
+.projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.project-card {
+    background: #fff;
+    border: 1px solid #edebe9;
+    border-radius: 4px;
+    padding: 20px;
+    text-decoration: none;
+    display: block;
+    transition: box-shadow 0.1s ease, border-color 0.1s ease;
+}
+
+.project-card:hover {
+    border-color: #054B70;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.project-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.project-icon {
+    width: 40px;
+    height: 40px;
+    background: #054B70;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.project-icon svg {
+    width: 20px;
+    height: 20px;
+    fill: #fff;
+}
+
+.project-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.project-title {
+    color: #323130;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.project-status {
+    font-size: 12px;
+    color: #107c10;
+}
+
+.project-status.coming-soon {
+    color: #605e5c;
+}
+
+.project-description {
+    color: #605e5c;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 16px;
+}
+
+.project-stats {
+    display: flex;
+    gap: 24px;
+    padding-top: 12px;
+    border-top: 1px solid #edebe9;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    color: #054B70;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.stat-label {
+    color: #a19f9d;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.project-card.disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.project-card.disabled:hover {
+    border-color: #edebe9;
+    box-shadow: none;
+}
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Automations</h1>
+    <p class="page-subtitle">Select a project to view details</p>
+</div>
+
+<div class="projects-grid">
+    <a href="{% url 'turnover' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">Turnover Automation</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">Sync turnover data from Google Drive to PostgreSQL. Connects to Power BI for reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ total_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{{ branch_count|default:"--" }}</span>
+                <span class="stat-label">Branches</span>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'pnl' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zm-6-1h2V9h-2v6zm-4 0h2v-4h-2v4zm8 0h2V7h-2v8z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">Atlantics Financial Report</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">Profit & Loss budget vs actual data for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ pnl_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{{ pnl_divisions|default:"--" }}</span>
+                <span class="stat-label">Divisions</span>
+            </div>
+        </div>
+    </a>
+
+    <div class="project-card disabled">
+        <div class="project-header">
+            <div class="project-icon" style="background: #a19f9d;">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">Claims Management</h3>
+                <span class="project-status coming-soon">Coming soon</span>
+            </div>
+        </div>
+        <p class="project-description">Automated claims processing and tracking system.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">--</span>
+                <span class="stat-label">Claims</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">--</span>
+                <span class="stat-label">Pending</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="project-card disabled">
+        <div class="project-header">
+            <div class="project-icon" style="background: #a19f9d;">
+                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4 6h-4v2h4v2h-4v2h4v2H9V7h6v2z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">Invoice Automation</h3>
+                <span class="project-status coming-soon">Coming soon</span>
+            </div>
+        </div>
+        <p class="project-description">Automated invoice generation and distribution.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">--</span>
+                <span class="stat-label">Invoices</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">--</span>
+                <span class="stat-label">This month</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

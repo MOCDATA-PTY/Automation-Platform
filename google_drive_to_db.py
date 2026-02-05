@@ -1,21 +1,72 @@
-from openpyxl import load_workbook
-from datetime import datetime
 import os
+import io
+import sys
+import tempfile
+from datetime import datetime
+from openpyxl import load_workbook
 import psycopg2
 from psycopg2.extras import execute_values
-import sys
+
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
 sys.stdout.reconfigure(line_buffering=True)
 
-base_folder = "/home/ethan/Desktop/Gork Test/Turn over GABE tuesday update"
+# Google Drive settings
+SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+CLIENT_SECRET_FILE = '/home/ethan/Desktop/Gork Test/Turn over GABE tuesday update/client_secret_929057555993-c86mkjhf08suobk6olcca6sgmudeg8l0.apps.googleusercontent.com.json'
+TOKEN_FILE = '/home/ethan/Desktop/Gork Test/token.json'
+FOLDER_ID = '1xPGTc8320el4HXmZ3tNsHcavGtZ4asIY'
 
+# PostgreSQL settings
 DB_HOST = "167.88.43.168"
 DB_PORT = "5432"
 DB_NAME = "turnover_data"
 DB_USER = "powerbi"
 DB_PASSWORD = "your_secure_password"
 
-years = ['2020', '2021', '2022', '2023', '2024', '2025']
+def get_drive_service():
+    """Authenticate and return Google Drive service"""
+    creds = None
+    if os.path.exists(TOKEN_FILE):
+        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
+            creds = flow.run_local_server(port=8080)
+        with open(TOKEN_FILE, 'w') as token:
+            token.write(creds.to_json())
+
+    return build('drive', 'v3', credentials=creds)
+
+def list_folders(service, parent_id):
+    """List folders in a parent folder"""
+    query = f"'{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    results = service.files().list(q=query, fields="files(id, name)").execute()
+    return results.get('files', [])
+
+def list_xlsx_files(service, folder_id):
+    """List xlsx files in a folder"""
+    query = f"'{folder_id}' in parents and (mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or name contains '.xlsx') and trashed=false"
+    results = service.files().list(q=query, fields="files(id, name)").execute()
+    return results.get('files', [])
+
+def download_file(service, file_id):
+    """Download a file and return as bytes"""
+    request = service.files().get_media(fileId=file_id)
+    file_buffer = io.BytesIO()
+    downloader = MediaIoBaseDownload(file_buffer, request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    file_buffer.seek(0)
+    return file_buffer
 
 def get_branch(filename):
     name = filename.upper().replace('.XLSX', '')
@@ -69,40 +120,58 @@ def process_wide_format(sheet, branch):
                             value,
                             date_val.strftime('%Y-%m-%d'),
                             date_val.strftime('%Y-%m-%d'),
-                            branch,
-                            date_val.strftime('%Y-%m-%d')
+                            branch
                         ))
                 except (ValueError, TypeError):
                     continue
     return data
 
 print("=" * 50)
-print("STARTING DATA PROCESSING")
+print("GOOGLE DRIVE TO POSTGRESQL")
 print("=" * 50)
+
+# Authenticate with Google Drive
+print("\n[GOOGLE] Authenticating...")
+service = get_drive_service()
+print("[GOOGLE] Authenticated!")
+
+# List year folders
+print(f"\n[GOOGLE] Scanning folder...")
+year_folders = list_folders(service, FOLDER_ID)
+print(f"[GOOGLE] Found {len(year_folders)} year folders: {[f['name'] for f in year_folders]}")
 
 all_data = []
 
-for year in years:
-    year_folder = os.path.join(base_folder, year)
-    if not os.path.exists(year_folder):
-        print(f"[ERROR] Folder not found: {year_folder}")
-        continue
+# Process each year folder
+for year_folder in sorted(year_folders, key=lambda x: x['name']):
+    year_name = year_folder['name']
+    year_id = year_folder['id']
 
-    files = [f for f in os.listdir(year_folder) if f.lower().endswith('.xlsx')]
-    files = [f for f in files if 'ALL OVER' not in f.upper()]
+    xlsx_files = list_xlsx_files(service, year_id)
+    xlsx_files = [f for f in xlsx_files if 'ALL OVER' not in f['name'].upper()]
 
-    print(f"\n[YEAR {year}] Processing {len(files)} files...")
+    print(f"\n[YEAR {year_name}] Processing {len(xlsx_files)} files...")
 
-    for filename in files:
+    for file_info in xlsx_files:
+        filename = file_info['name']
+        file_id = file_info['id']
         branch = get_branch(filename)
+
         if branch is None:
             continue
-        filepath = os.path.join(year_folder, filename)
+
         try:
-            wb = load_workbook(filepath, data_only=True)
+            # Download file
+            file_buffer = download_file(service, file_id)
+
+            # Load workbook from buffer
+            wb = load_workbook(file_buffer, data_only=True)
             sheet = wb.active
+
+            # Process data
             data = process_wide_format(sheet, branch)
             all_data.extend(data)
+
             print(f"  -> {filename}: {len(data)} rows")
             wb.close()
         except Exception as e:
@@ -110,6 +179,7 @@ for year in years:
 
 print(f"\n[TOTAL] {len(all_data)} rows collected")
 
+# Push to PostgreSQL
 print(f"\n[POSTGRESQL] Connecting to {DB_HOST}...")
 conn = None
 try:
@@ -125,10 +195,9 @@ try:
     cursor = conn.cursor()
     print("[POSTGRESQL] Connected!")
 
-    print("[POSTGRESQL] Dropping old table if exists...")
+    print("[POSTGRESQL] Dropping old table...")
     cursor.execute("DROP TABLE IF EXISTS turnover_data CASCADE")
     conn.commit()
-    print("[POSTGRESQL] Old table dropped!")
 
     print("[POSTGRESQL] Creating new table...")
     cursor.execute('''
@@ -139,36 +208,30 @@ try:
             value DECIMAL(15,2),
             date DATE,
             date_fixed VARCHAR(20),
-            branch VARCHAR(50),
-            date_powerbi DATE
+            branch VARCHAR(50)
         )
     ''')
     conn.commit()
     print("[POSTGRESQL] Table created!")
 
-    # Bulk insert in batches
+    # Bulk insert
     batch_size = 1000
     total = len(all_data)
-    print(f"[POSTGRESQL] Bulk inserting {total} rows in batches of {batch_size}...")
+    print(f"[POSTGRESQL] Inserting {total} rows...")
 
     for i in range(0, total, batch_size):
         batch = all_data[i:i+batch_size]
         execute_values(cursor, '''
-            INSERT INTO turnover_data (debtor, debtor_name, value, date, date_fixed, branch, date_powerbi)
+            INSERT INTO turnover_data (debtor, debtor_name, value, date, date_fixed, branch)
             VALUES %s
         ''', batch)
         conn.commit()
         print(f"  -> Inserted {min(i+batch_size, total)}/{total} rows...")
 
     print(f"[POSTGRESQL] Done! {total} rows inserted.")
-
     cursor.close()
     conn.close()
 
-except psycopg2.OperationalError as e:
-    print(f"[POSTGRESQL ERROR] Connection failed: {e}")
-    if conn:
-        conn.close()
 except Exception as e:
     print(f"[POSTGRESQL ERROR] {e}")
     if conn:
@@ -178,9 +241,3 @@ except Exception as e:
 print("\n" + "=" * 50)
 print("COMPLETE!")
 print("=" * 50)
-print(f"\nPower BI Connection:")
-print(f"  Server: {DB_HOST}")
-print(f"  Port: {DB_PORT}")
-print(f"  Database: {DB_NAME}")
-print(f"  Username: {DB_USER}")
-print(f"  Table: turnover_data")

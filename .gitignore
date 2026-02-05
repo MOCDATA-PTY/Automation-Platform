@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+
+automations/last_sync.json
+automations/sync_log.txt
+
+# Data files
+*.xlsx
+*.xls
+2025/
+PNL Raw Data/
+PNLS/
+Turn over GABE tuesday update/
