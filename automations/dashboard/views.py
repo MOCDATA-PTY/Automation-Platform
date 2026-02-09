@@ -56,11 +56,29 @@ def home(request):
         pnl_rows = 0
         pnl_divisions = 0
 
+    # PNL station stats
+    station_tables = {
+        'ppg': 'ppg_pnl', 'dor': 'dor_pnl', 'con': 'con_pnl',
+        'atl': 'atl_pnl', 'ccc': 'ccc_pnl', 'ccd': 'ccd_pnl',
+        'fax': 'fax_pnl', 'hnl': 'hnl_pnl', 'hou': 'hou_pnl',
+        'ics': 'ics_pnl', 'imp': 'imp_pnl', 'jfk': 'jfk_pnl',
+        'lax': 'lax_pnl', 'lcl': 'lcl_pnl', 'ord': 'ord_pnl',
+    }
+    station_rows = {}
+    for key, table in station_tables.items():
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                station_rows[f'{key}_rows'] = cursor.fetchone()[0]
+        except:
+            station_rows[f'{key}_rows'] = 0
+
     context = {
         'total_rows': total_rows,
         'branch_count': branch_count,
         'pnl_rows': pnl_rows,
         'pnl_divisions': pnl_divisions,
+        **station_rows,
     }
     return render(request, 'home.html', context)
 
@@ -120,6 +138,37 @@ def pnl(request):
 
 
 @login_required
+def ppg(request):
+    """PPG Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM ppg_pnl")
+            total_records = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM ppg_pnl WHERE budget_actual = 'Budget'")
+            budget_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM ppg_pnl WHERE budget_actual = 'Actual'")
+            actual_count = cursor.fetchone()[0]
+            cursor.execute("SELECT MIN(date), MAX(date) FROM ppg_pnl")
+            min_date, max_date = cursor.fetchone()
+    except:
+        total_records = 0
+        budget_count = 0
+        actual_count = 0
+        min_date = None
+        max_date = None
+
+    context = {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'min_date': min_date,
+        'max_date': max_date,
+        'last_sync': onedrive_sync.get_ppg_last_sync(),
+    }
+    return render(request, 'ppg.html', context)
+
+
+@login_required
 def sync_data(request):
     if request.method == 'POST':
         # Check if OneDrive is authenticated
@@ -176,3 +225,1133 @@ def onedrive_check(request):
     """Check if OneDrive is authenticated"""
     token = onedrive_sync.get_access_token()
     return JsonResponse({'authenticated': token is not None})
+
+
+# PPG sync progress storage
+ppg_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_ppg_progress(status, message, current=0, total=0):
+    global ppg_sync_progress
+    ppg_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_ppg(request):
+    """Sync PPG data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_ppg_progress('starting', 'Starting PPG sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_ppg_progress('syncing', 'Checking OneDrive for PPG files...', 10, 100)
+                count = onedrive_sync.sync_ppg_data()
+                if count > 0:
+                    update_ppg_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_ppg_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_ppg_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started'})
+    return redirect('ppg')
+
+
+@login_required
+def sync_ppg_progress(request):
+    """Get PPG sync progress"""
+    return JsonResponse(ppg_sync_progress)
+
+
+# DOR views and sync
+@login_required
+def dor(request):
+    """DOR Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM dor_pnl")
+            total_records = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM dor_pnl WHERE budget_actual = 'Budget'")
+            budget_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM dor_pnl WHERE budget_actual = 'Actual'")
+            actual_count = cursor.fetchone()[0]
+            cursor.execute("SELECT MIN(date), MAX(date) FROM dor_pnl")
+            min_date, max_date = cursor.fetchone()
+    except:
+        total_records = 0
+        budget_count = 0
+        actual_count = 0
+        min_date = None
+        max_date = None
+
+    context = {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'min_date': min_date,
+        'max_date': max_date,
+        'last_sync': onedrive_sync.get_dor_last_sync(),
+    }
+    return render(request, 'dor.html', context)
+
+
+# DOR sync progress storage
+dor_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_dor_progress(status, message, current=0, total=0):
+    global dor_sync_progress
+    dor_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_dor(request):
+    """Sync DOR data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_dor_progress('starting', 'Starting DOR sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_dor_progress('syncing', 'Checking OneDrive for DOR files...', 10, 100)
+                count = onedrive_sync.sync_dor_data()
+                if count > 0:
+                    update_dor_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_dor_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_dor_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started'})
+    return redirect('dor')
+
+
+@login_required
+def sync_dor_progress(request):
+    """Get DOR sync progress"""
+    return JsonResponse(dor_sync_progress)
+
+
+# CON Views
+con_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+atl_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_con_progress(status, message, current=0, total=0):
+    global con_sync_progress
+    con_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+def update_atl_progress(status, message, current=0, total=0):
+    global atl_sync_progress
+    atl_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_con(request):
+    """Sync CON data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_con_progress('starting', 'Starting CON sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_con_progress('syncing', 'Checking OneDrive for CON files...', 10, 100)
+                count = onedrive_sync.sync_con_data()
+                if count > 0:
+                    update_con_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_con_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_con_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started'})
+    return redirect('con')
+
+
+@login_required
+def sync_con_progress(request):
+    """Get CON sync progress"""
+    return JsonResponse(con_sync_progress)
+
+
+@login_required
+def con(request):
+    """CON Financial Analysis page"""
+    with connection.cursor() as cursor:
+        # Get total records
+        cursor.execute("SELECT COUNT(*) FROM con_pnl")
+        total_records = cursor.fetchone()[0] or 0
+
+        # Get distinct months
+        cursor.execute("SELECT COUNT(DISTINCT date) FROM con_pnl")
+        month_count = cursor.fetchone()[0] or 0
+
+        # Get distinct accounts
+        cursor.execute("SELECT COUNT(DISTINCT account_name) FROM con_pnl")
+        account_count = cursor.fetchone()[0] or 0
+
+    last_sync = onedrive_sync.get_con_last_sync()
+
+    return render(request, 'con.html', {
+        'total_records': total_records,
+        'month_count': month_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+# ATL view
+@login_required
+def atl(request):
+    """ATL Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM atl_pnl")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM atl_pnl WHERE budget_actual LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM atl_pnl WHERE budget_actual LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM atl_pnl")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+
+    last_sync = onedrive_sync.get_atl_last_sync()
+
+    return render(request, 'atl.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+
+@login_required
+def sync_atl(request):
+    """Sync ATL data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_atl_progress('starting', 'Starting ATL sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_atl_progress('syncing', 'Checking OneDrive for ATL files...', 10, 100)
+                count = onedrive_sync.sync_atl_data()
+                if count > 0:
+                    update_atl_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_atl_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_atl_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_atl_progress(request):
+    """Get ATL sync progress"""
+    return JsonResponse(atl_sync_progress)
+
+
+# HNL views
+@login_required
+def hnl(request):
+    """HNL Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM hnl_pnl")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM hnl_pnl WHERE budget_actual LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM hnl_pnl WHERE budget_actual LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM hnl_pnl")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+
+    last_sync = onedrive_sync.get_hnl_last_sync()
+
+    return render(request, 'hnl.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+
+# HNL sync progress tracking
+hnl_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_hnl_progress(status, message, current=0, total=0):
+    global hnl_sync_progress
+    hnl_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_hnl(request):
+    """Sync HNL data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_hnl_progress('starting', 'Starting HNL sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_hnl_progress('syncing', 'Checking OneDrive for HNL files...', 10, 100)
+                count = onedrive_sync.sync_hnl_data()
+                if count > 0:
+                    update_hnl_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_hnl_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_hnl_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request'})
+
+
+def sync_hnl_progress(request):
+    """Get HNL sync progress"""
+    return JsonResponse(hnl_sync_progress)
+
+
+# CCC views
+@login_required
+def ccc(request):
+    """CCC Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM ccc_pnl")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM ccc_pnl WHERE budget_actual LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM ccc_pnl WHERE budget_actual LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM ccc_pnl")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+
+    last_sync = onedrive_sync.get_ccc_last_sync()
+
+    return render(request, 'ccc.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+
+# CCC sync progress tracking
+ccc_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_ccc_progress(status, message, current=0, total=0):
+    global ccc_sync_progress
+    ccc_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_ccc(request):
+    """Sync CCC data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_ccc_progress('starting', 'Starting CCC sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_ccc_progress('syncing', 'Checking OneDrive for CCC files...', 10, 100)
+                count = onedrive_sync.sync_ccc_data()
+                if count > 0:
+                    update_ccc_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_ccc_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_ccc_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_ccc_progress(request):
+    """Get CCC sync progress"""
+    return JsonResponse(ccc_sync_progress)
+
+
+# CCD view
+@login_required
+def ccd(request):
+    """CCD Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM ccd_pnl")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM ccd_pnl WHERE budget_actual LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM ccd_pnl WHERE budget_actual LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM ccd_pnl")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+    
+    last_sync = onedrive_sync.get_ccd_last_sync()
+
+    return render(request, 'ccd.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+
+# FAX view
+@login_required
+def fax(request):
+    """FAX Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM fax_pnl")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM fax_pnl WHERE budget_actual LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM fax_pnl WHERE budget_actual LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM fax_pnl")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+    
+    last_sync = onedrive_sync.get_fax_last_sync()
+
+    return render(request, 'fax.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+
+# HEC view
+@login_required
+def hec(request):
+    """HEC Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM pnl_data WHERE division = 'HEC'")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM pnl_data WHERE division = 'HEC' AND account_name LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM pnl_data WHERE division = 'HEC' AND account_name LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM pnl_data WHERE division = 'HEC'")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+    
+    return render(request, 'hec.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count
+    })
+
+
+# HOU view
+@login_required
+def hou(request):
+    """HOU Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM hou_pnl")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM hou_pnl WHERE budget_actual LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM hou_pnl WHERE budget_actual LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM hou_pnl")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+    
+    last_sync = onedrive_sync.get_hou_last_sync()
+
+    return render(request, 'hou.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+
+# ICS view
+@login_required
+def ics(request):
+    """ICS Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM ics_pnl")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM ics_pnl WHERE budget_actual LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM ics_pnl WHERE budget_actual LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM ics_pnl")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+    
+    last_sync = onedrive_sync.get_ics_last_sync()
+
+    return render(request, 'ics.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+
+# IMP view
+@login_required
+def imp(request):
+    """IMP Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM imp_pnl")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM imp_pnl WHERE budget_actual LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM imp_pnl WHERE budget_actual LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM imp_pnl")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+    
+    last_sync = onedrive_sync.get_imp_last_sync()
+
+    return render(request, 'imp.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+
+# JFK view
+@login_required
+def jfk(request):
+    """JFK Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM jfk_pnl")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM jfk_pnl WHERE budget_actual LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM jfk_pnl WHERE budget_actual LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM jfk_pnl")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+    
+    last_sync = onedrive_sync.get_jfk_last_sync()
+
+    return render(request, 'jfk.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+
+# LAX view
+@login_required
+def lax(request):
+    """LAX Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM lax_pnl")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM lax_pnl WHERE budget_actual LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM lax_pnl WHERE budget_actual LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM lax_pnl")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+    
+    last_sync = onedrive_sync.get_lax_last_sync()
+
+    return render(request, 'lax.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+
+# LCL view
+@login_required
+def lcl(request):
+    """LCL Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM lcl_pnl")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM lcl_pnl WHERE budget_actual LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM lcl_pnl WHERE budget_actual LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM lcl_pnl")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+    
+    last_sync = onedrive_sync.get_lcl_last_sync()
+
+    return render(request, 'lcl.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+
+# ORD view
+@login_required
+def ord(request):
+    """ORD Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM ord_pnl")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM ord_pnl WHERE budget_actual LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM ord_pnl WHERE budget_actual LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM ord_pnl")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+    
+    last_sync = onedrive_sync.get_ord_last_sync()
+
+    return render(request, 'ord.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+
+# CCD sync progress tracking
+ccd_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_ccd_progress(status, message, current=0, total=0):
+    global ccd_sync_progress
+    ccd_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_ccd(request):
+    """Sync CCD data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_ccd_progress('starting', 'Starting CCD sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_ccd_progress('syncing', 'Checking OneDrive for CCD files...', 10, 100)
+                count = onedrive_sync.sync_ccd_data()
+                if count > 0:
+                    update_ccd_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_ccd_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_ccd_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_ccd_progress(request):
+    """Get CCD sync progress"""
+    return JsonResponse(ccd_sync_progress)
+
+
+# FAX sync progress tracking
+fax_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_fax_progress(status, message, current=0, total=0):
+    global fax_sync_progress
+    fax_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_fax(request):
+    """Sync FAX data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_fax_progress('starting', 'Starting FAX sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_fax_progress('syncing', 'Checking OneDrive for FAX files...', 10, 100)
+                count = onedrive_sync.sync_fax_data()
+                if count > 0:
+                    update_fax_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_fax_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_fax_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_fax_progress(request):
+    """Get FAX sync progress"""
+    return JsonResponse(fax_sync_progress)
+
+
+# HOU sync progress tracking
+hou_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_hou_progress(status, message, current=0, total=0):
+    global hou_sync_progress
+    hou_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_hou(request):
+    """Sync HOU data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_hou_progress('starting', 'Starting HOU sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_hou_progress('syncing', 'Checking OneDrive for HOU files...', 10, 100)
+                count = onedrive_sync.sync_hou_data()
+                if count > 0:
+                    update_hou_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_hou_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_hou_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_hou_progress(request):
+    """Get HOU sync progress"""
+    return JsonResponse(hou_sync_progress)
+
+
+# ICS sync progress tracking
+ics_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_ics_progress(status, message, current=0, total=0):
+    global ics_sync_progress
+    ics_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_ics(request):
+    """Sync ICS data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_ics_progress('starting', 'Starting ICS sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_ics_progress('syncing', 'Checking OneDrive for ICS files...', 10, 100)
+                count = onedrive_sync.sync_ics_data()
+                if count > 0:
+                    update_ics_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_ics_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_ics_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_ics_progress(request):
+    """Get ICS sync progress"""
+    return JsonResponse(ics_sync_progress)
+
+
+# IMP sync progress tracking
+imp_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_imp_progress(status, message, current=0, total=0):
+    global imp_sync_progress
+    imp_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_imp(request):
+    """Sync IMP data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_imp_progress('starting', 'Starting IMP sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_imp_progress('syncing', 'Checking OneDrive for IMP files...', 10, 100)
+                count = onedrive_sync.sync_imp_data()
+                if count > 0:
+                    update_imp_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_imp_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_imp_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_imp_progress(request):
+    """Get IMP sync progress"""
+    return JsonResponse(imp_sync_progress)
+
+
+# JFK sync progress tracking
+jfk_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_jfk_progress(status, message, current=0, total=0):
+    global jfk_sync_progress
+    jfk_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_jfk(request):
+    """Sync JFK data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_jfk_progress('starting', 'Starting JFK sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_jfk_progress('syncing', 'Checking OneDrive for JFK files...', 10, 100)
+                count = onedrive_sync.sync_jfk_data()
+                if count > 0:
+                    update_jfk_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_jfk_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_jfk_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_jfk_progress(request):
+    """Get JFK sync progress"""
+    return JsonResponse(jfk_sync_progress)
+
+
+# LAX sync progress tracking
+lax_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_lax_progress(status, message, current=0, total=0):
+    global lax_sync_progress
+    lax_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_lax(request):
+    """Sync LAX data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_lax_progress('starting', 'Starting LAX sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_lax_progress('syncing', 'Checking OneDrive for LAX files...', 10, 100)
+                count = onedrive_sync.sync_lax_data()
+                if count > 0:
+                    update_lax_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_lax_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_lax_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_lax_progress(request):
+    """Get LAX sync progress"""
+    return JsonResponse(lax_sync_progress)
+
+
+# LCL sync progress tracking
+lcl_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_lcl_progress(status, message, current=0, total=0):
+    global lcl_sync_progress
+    lcl_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_lcl(request):
+    """Sync LCL data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_lcl_progress('starting', 'Starting LCL sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_lcl_progress('syncing', 'Checking OneDrive for LCL files...', 10, 100)
+                count = onedrive_sync.sync_lcl_data()
+                if count > 0:
+                    update_lcl_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_lcl_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_lcl_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_lcl_progress(request):
+    """Get LCL sync progress"""
+    return JsonResponse(lcl_sync_progress)
+
+
+# ORD sync progress tracking
+ord_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_ord_progress(status, message, current=0, total=0):
+    global ord_sync_progress
+    ord_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_ord(request):
+    """Sync ORD data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_ord_progress('starting', 'Starting ORD sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_ord_progress('syncing', 'Checking OneDrive for ORD files...', 10, 100)
+                count = onedrive_sync.sync_ord_data()
+                if count > 0:
+                    update_ord_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_ord_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_ord_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_ord_progress(request):
+    """Get ORD sync progress"""
+    return JsonResponse(ord_sync_progress)

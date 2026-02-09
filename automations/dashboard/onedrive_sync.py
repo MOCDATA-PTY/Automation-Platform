@@ -24,12 +24,38 @@ def get_msal_app():
     )
 
 def get_access_token():
-    """Get access token from saved file or return None"""
+    """Get access token from saved file, refresh if expired"""
     token_file = settings.ONEDRIVE_TOKEN_FILE
     if os.path.exists(token_file):
         with open(token_file, 'r') as f:
             token_data = json.load(f)
-            return token_data.get('access_token')
+
+        # Check if token is expired by trying to use it
+        access_token = token_data.get('access_token')
+        if access_token:
+            # Quick validation check
+            headers = {'Authorization': f'Bearer {access_token}'}
+            response = requests.get(f'{GRAPH_API_ENDPOINT}/me/drive', headers=headers)
+
+            if response.status_code == 200:
+                # Token is valid
+                return access_token
+            elif response.status_code == 401 and token_data.get('refresh_token'):
+                # Token expired, try to refresh
+                print("Access token expired, refreshing...")
+                app = get_msal_app()
+                result = app.acquire_token_by_refresh_token(
+                    token_data['refresh_token'],
+                    scopes=settings.ONEDRIVE_SCOPES
+                )
+                if "access_token" in result:
+                    save_token(result)
+                    print("Token refreshed successfully")
+                    return result['access_token']
+                else:
+                    print(f"Token refresh failed: {result.get('error_description', 'Unknown error')}")
+
+            return access_token
     return None
 
 def save_token(token_data):
@@ -108,6 +134,18 @@ def download_file(file_id):
     if response.status_code == 200:
         return io.BytesIO(response.content)
     return None
+
+def delete_file(file_id):
+    """Delete file from OneDrive by file ID"""
+    token = get_access_token()
+    if not token:
+        return False
+
+    headers = {'Authorization': f'Bearer {token}'}
+    url = f'{GRAPH_API_ENDPOINT}/me/drive/items/{file_id}'
+
+    response = requests.delete(url, headers=headers)
+    return response.status_code == 204
 
 def get_branch(filename):
     """Extract branch code from filename"""
@@ -339,9 +377,2715 @@ def sync_turnover_data():
     else:
         print(f"\n✓ No new files to sync")
 
-    # Always save last sync time (even if no new records)
-    last_sync = {'last_sync': datetime.now().isoformat()}
+    # Always save last sync time (even if no new records) - using local system time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
     with open(settings.LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
     return len(all_rows)
+
+
+def yyyymm_to_date(month_yyyymm):
+    """Convert YYYYMM integer to date string (first day of month).
+    Example: 202601 -> '2026-01-01'
+    """
+    year = month_yyyymm // 100
+    month = month_yyyymm % 100
+    return f"{year}-{month:02d}-01"
+
+
+def calculate_week_number(report_date, month_yyyymm):
+    """Calculate week number based on report date and data month.
+    For previous months (past month end), always Week 5.
+    For current month: Days 1-7 = None, Days 8+ divided proportionally into 4 weeks.
+    Every month gets Weeks 1-4 within the month, then Week 5 when next month comes.
+    """
+    import calendar
+
+    # Extract year and month from YYYYMM
+    data_year = month_yyyymm // 100
+    data_month = month_yyyymm % 100
+
+    # Get the month/year from report_date
+    report_year = report_date.year
+    report_month = report_date.month
+
+    # If the data month is BEFORE the report month, it's past the month end
+    # So this is the final/closing week = Week 5
+    if (data_year < report_year) or (data_year == report_year and data_month < report_month):
+        return 5  # Final week for previous month
+
+    # Same month as report - calculate based on report date day
+    day = report_date.day
+
+    # Days 1-7 = No week (too early!)
+    if day <= 7:
+        return None  # Too early - no week yet
+
+    # Get last day of the data month
+    last_day = calendar.monthrange(data_year, data_month)[1]
+
+    # Calculate proportional weeks for days 8 to last_day
+    # Total available days: last_day - 7 (e.g., 31-day month has 24 days for weeks)
+    total_days = last_day - 7
+    days_per_week = total_days / 4
+
+    # Calculate which week this day falls into
+    # day 8 is the start (day_offset = 0)
+    day_offset = day - 8
+    week = int(day_offset / days_per_week) + 1
+
+    # Ensure week is between 1 and 4
+    if week > 4:
+        week = 4
+
+    return week
+
+
+def process_ppg_excel_file(file_content, filename):
+    """Process PPG Excel file - reads 'GL PL Period Analysis' sheet"""
+    rows = []
+
+    try:
+        # Extract report date from filename
+        # Format: "PPG INT Profit And Loss Period Analysis 202602 Sunday, 01 February 2026 00_04_39.XLS"
+        import re
+        date_match = re.search(r'(\d{2})\s+(\w+)\s+(\d{4})', filename)
+        if date_match:
+            day = int(date_match.group(1))
+            month_name = date_match.group(2)
+            year = int(date_match.group(3))
+            report_date = datetime.strptime(f"{day} {month_name} {year}", "%d %B %Y")
+            print(f"  Report date: {report_date.strftime('%Y-%m-%d')}")
+        else:
+            print(f"  Warning: Could not extract report date from filename")
+            report_date = datetime.now()
+
+        file_content.seek(0)
+
+        # Try openpyxl first for .xlsx files
+        try:
+            wb = openpyxl.load_workbook(file_content, data_only=True)
+            ws = wb['GL PL Period Analysis']
+
+            print(f"  Processing sheet: GL PL Period Analysis")
+            print(f"  Rows: {ws.max_row}, Columns: {ws.max_column}")
+
+            # Find header row (row with month columns like 202601, 202602)
+            header_row_idx = None
+            for row_idx in range(1, min(20, ws.max_row + 1)):
+                # Check cells in this row for YYYYMM pattern
+                for col in range(1, min(30, ws.max_column + 1)):
+                    val = ws.cell(row=row_idx, column=col).value
+                    if isinstance(val, (int, float)) and 202000 <= val <= 209999:
+                        header_row_idx = row_idx
+                        break
+                if header_row_idx:
+                    break
+
+            if header_row_idx is None:
+                print(f"  Error: Could not find header row with month columns")
+                return []
+
+            print(f"  Found header row at row {header_row_idx}")
+
+            # Find month columns by scanning the header row
+            # Only keep FIRST occurrence of each month (Excel may have duplicate month columns)
+            month_columns = []
+            seen_months = set()
+            for col_num in range(1, min(60, ws.max_column + 1)):  # Scan more columns
+                val = ws.cell(row=header_row_idx, column=col_num).value
+                if isinstance(val, (int, float)) and 202000 <= val <= 209999:
+                    month_val = int(val)
+                    if month_val not in seen_months:
+                        month_columns.append((col_num, month_val))
+                        seen_months.add(month_val)
+
+            print(f"  Found {len(month_columns)} month columns: {month_columns}")
+
+            # Process data rows
+            for row_idx in range(header_row_idx + 1, ws.max_row + 1):
+                # Don't use list comprehension - directly access cells by column index
+                # to avoid issues with variable row lengths
+                if not any(ws[row_idx]):
+                    continue
+
+                # Column 2: A/C (account number), Column 3: Account name (Excel is 1-indexed)
+                account_number = str(ws.cell(row=row_idx, column=2).value).strip() if ws.cell(row=row_idx, column=2).value else None
+                account_name = str(ws.cell(row=row_idx, column=3).value).strip() if ws.cell(row=row_idx, column=3).value else None
+
+                if not account_number and not account_name:
+                    continue
+
+                # Debug logging for specific account
+                debug_account = "CURRENT YEAR INCOME (LOSS)"
+                if account_name and debug_account in account_name:
+                    print(f"  DEBUG: Row {row_idx}, Account: {account_name}")
+
+                # Process each month column
+                for col_num, month_yyyymm in month_columns:
+                    # Use direct cell access instead of row list to avoid index misalignment
+                    # col_num is now 1-indexed (Excel column number)
+                    value = ws.cell(row=row_idx, column=col_num).value
+
+                    # Debug logging
+                    if account_name and debug_account in account_name:
+                        print(f"    Col {col_num} (month {month_yyyymm}): value = {value}")
+
+                    if value is not None and isinstance(value, (int, float)):
+                        # Calculate week number for this row
+                        week = calculate_week_number(report_date, month_yyyymm)
+
+                        # Skip if no week assigned (too early in the month)
+                        if week is None:
+                            continue
+
+                        week_label = f"Week {week}"
+
+                        # Convert YYYYMM to date
+                        date_fixed = yyyymm_to_date(month_yyyymm)
+
+                        # OneDrive sync only handles Actual data - Budget stays completely untouched
+                        budget_actual = "Actual"
+
+                        # Store: (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                        rows.append(("PPG", account_name, value, month_yyyymm, date_fixed, budget_actual, week_label, report_date.strftime('%Y-%m-%d')))
+
+        except Exception as xlsx_error:
+            # Try xlrd for old .xls format
+            file_content.seek(0)
+            wb = xlrd.open_workbook(file_contents=file_content.read())
+            ws = wb.sheet_by_name('GL PL Period Analysis')
+
+            print(f"  Processing sheet: GL PL Period Analysis")
+            print(f"  Rows: {ws.nrows}, Columns: {ws.ncols}")
+
+            # Find header row (row with month columns like 202601, 202602)
+            header_row_idx = None
+            for row_idx in range(min(20, ws.nrows)):
+                # Check cells in this row for YYYYMM pattern
+                for col_idx in range(min(30, ws.ncols)):
+                    val = ws.cell_value(row_idx, col_idx)
+                    if isinstance(val, (int, float)) and 202000 <= val <= 209999:
+                        header_row_idx = row_idx
+                        break
+                if header_row_idx is not None:
+                    break
+
+            if header_row_idx is None:
+                print(f"  Error: Could not find header row with month columns")
+                return []
+
+            print(f"  Found header row at row {header_row_idx + 1}")
+
+            # Find month columns by scanning the header row
+            # Only keep FIRST occurrence of each month (Excel may have duplicate month columns)
+            month_columns = []
+            seen_months = set()
+            for col_idx in range(min(60, ws.ncols)):  # Scan more columns
+                val = ws.cell_value(header_row_idx, col_idx)
+                if isinstance(val, (int, float)) and 202000 <= val <= 209999:
+                    month_val = int(val)
+                    if month_val not in seen_months:
+                        month_columns.append((col_idx, month_val))
+                        seen_months.add(month_val)
+
+            print(f"  Found {len(month_columns)} month columns: {month_columns}")
+
+            # Process data rows
+            for row_idx in range(header_row_idx + 1, ws.nrows):
+                # Check if row has any data
+                row = ws.row_values(row_idx)
+                if not any(row):
+                    continue
+
+                # Column 1: A/C (account number), Column 2: Account name (0-indexed)
+                account_number = str(ws.cell_value(row_idx, 1)).strip() if ws.ncols > 1 and ws.cell_value(row_idx, 1) else None
+                account_name = str(ws.cell_value(row_idx, 2)).strip() if ws.ncols > 2 and ws.cell_value(row_idx, 2) else None
+
+                if not account_number and not account_name:
+                    continue
+
+                # Debug logging for specific account
+                debug_account = "CURRENT YEAR INCOME (LOSS)"
+                if account_name and debug_account in account_name:
+                    print(f"  DEBUG: Row {row_idx + 1}, Account: {account_name}")
+
+                # Process each month column
+                for col_idx, month_yyyymm in month_columns:
+                    if col_idx >= ws.ncols:
+                        continue
+
+                    # Use direct cell access instead of row list to avoid index misalignment
+                    value = ws.cell_value(row_idx, col_idx)
+
+                    # Debug logging
+                    if account_name and debug_account in account_name:
+                        print(f"    Col {col_idx} (month {month_yyyymm}): value = {value}")
+
+                    if value is not None and isinstance(value, (int, float)):
+                        # Calculate week number for this row
+                        week = calculate_week_number(report_date, month_yyyymm)
+
+                        # Skip if no week assigned (too early in the month)
+                        if week is None:
+                            continue
+
+                        week_label = f"Week {week}"
+
+                        # Convert YYYYMM to date
+                        date_fixed = yyyymm_to_date(month_yyyymm)
+
+                        # OneDrive sync only handles Actual data - Budget stays completely untouched
+                        budget_actual = "Actual"
+
+                        # Store: (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                        rows.append(("PPG", account_name, value, month_yyyymm, date_fixed, budget_actual, week_label, report_date.strftime('%Y-%m-%d')))
+
+    except Exception as e:
+        print(f"  Error processing PPG file {filename}: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+    return rows
+
+
+def sync_ppg_data():
+    """Sync PPG data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_PPG_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in PPG folder")
+
+    all_rows = []
+    processed_files = []  # Track successfully processed files
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_ppg_excel_file(file_content, file_info['name'])
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)  # Track for deletion
+
+    # Insert data with proper week and Total handling
+    if all_rows:
+        with connection.cursor() as cur:
+            # Get unique (month, week) combinations from the new data
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)  # (month, week)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM ppg_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM ppg_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM ppg_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO ppg_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month to keep them separate
+            # Group rows by month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]  # date (YYYYMM)
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM ppg_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time (using local system time)
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.PPG_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_ppg_last_sync():
+    """Get the last PPG sync info"""
+    try:
+        with open(settings.PPG_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+
+def process_dor_excel_file(file_content, filename):
+    """Process DOR Excel file - reads 'GL PL Period Analysis' sheet"""
+    # Same logic as PPG
+    return process_ppg_excel_file(file_content, filename.replace('DOR', 'PPG'))
+
+
+def sync_dor_data():
+    """Sync DOR data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_DOR_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in DOR folder")
+
+    all_rows = []
+    processed_files = []
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_dor_excel_file(file_content, file_info['name'])
+            # Change division from PPG to DOR
+            rows = [(('DOR', row[1], row[2], row[3], row[4], row[5], row[6], row[7])) for row in rows]
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)
+
+    # Insert data
+    if all_rows:
+        with connection.cursor() as cur:
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM dor_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM dor_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM dor_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO dor_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM dor_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.DOR_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_dor_last_sync():
+    """Get the last DOR sync info"""
+    try:
+        with open(settings.DOR_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+def process_con_excel_file(file_content, filename):
+    """Process CON Excel file - reads 'GL PL Period Analysis' sheet"""
+    # Same logic as PPG
+    return process_ppg_excel_file(file_content, filename.replace('CON', 'PPG'))
+
+
+def process_atl_excel_file(file_content, filename):
+    """Process ATL Excel file - reads 'GL PL Period Analysis' sheet"""
+    # ATL uses IMP as the division, so we need to process like PPG then replace division
+    rows = process_ppg_excel_file(file_content, filename.replace('ATL', 'PPG'))
+    # Replace PPG division with IMP (ATL's division code)
+    return [(("IMP",) + row[1:]) for row in rows]
+
+
+def process_hnl_excel_file(file_content, filename):
+    """Process HNL Excel file - reads 'GL PL Period Analysis' sheet"""
+    # HNL uses HNL as the division, just process like PPG and keep HNL
+    rows = process_ppg_excel_file(file_content, filename.replace('HNL', 'PPG'))
+    # Replace PPG division with HNL
+    return [(("HNL",) + row[1:]) for row in rows]
+
+
+def sync_con_data():
+    """Sync CON data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_CON_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in CON folder")
+
+    all_rows = []
+    processed_files = []
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_con_excel_file(file_content, file_info['name'])
+            # Change division from PPG to CON
+            rows = [(('CON', row[1], row[2], row[3], row[4], row[5], row[6], row[7])) for row in rows]
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)
+
+    # Insert data
+    if all_rows:
+        with connection.cursor() as cur:
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM con_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM con_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM con_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO con_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM con_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.CON_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_con_last_sync():
+    """Get the last CON sync info"""
+    try:
+        with open(settings.CON_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+
+def sync_atl_data():
+    """Sync ATL data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_ATL_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in ATL folder")
+
+    all_rows = []
+    processed_files = []
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            # Process Excel file using ATL processor (similar to PPG/CON)
+            rows = process_atl_excel_file(file_content, file_info['name'])
+
+            if rows:
+                all_rows.extend(rows)
+                print(f"  Extracted {len(rows)} records")
+                processed_files.append(file_info)
+            else:
+                print(f"  No data extracted from file")
+
+    # Insert data with proper week and Total handling
+    if all_rows:
+        with connection.cursor() as cur:
+            # Get unique (month, week) combinations from the new data
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)  # (month, week)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM atl_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM atl_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM atl_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO atl_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month to keep them separate
+            # Group rows by month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]  # date (YYYYMM)
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM atl_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.ATL_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_atl_last_sync():
+    """Get the last ATL sync info"""
+    try:
+        with open(settings.ATL_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+
+def sync_hnl_data():
+    """Sync HNL data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_HNL_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in HNL folder")
+
+    all_rows = []
+    processed_files = []  # Track successfully processed files
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_hnl_excel_file(file_content, file_info['name'])
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)  # Track for deletion
+
+    # Insert data with proper week and Total handling
+    if all_rows:
+        with connection.cursor() as cur:
+            # Get unique (month, week) combinations from the new data
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)  # (month, week)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM hnl_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM hnl_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM hnl_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO hnl_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month to keep them separate
+            # Group rows by month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]  # date (YYYYMM)
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM hnl_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.HNL_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_hnl_last_sync():
+    """Get the last HNL sync info"""
+    try:
+        with open(settings.HNL_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+
+# ==================== JFK Functions ====================
+
+def process_jfk_excel_file(file_content, filename):
+    """Process JFK Excel file - reads 'GL PL Period Analysis' sheet"""
+    rows = process_ppg_excel_file(file_content, filename.replace('JFK', 'PPG'))
+    return [(("JFK",) + row[1:]) for row in rows]
+
+
+def sync_jfk_data():
+    """Sync JFK data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_JFK_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in JFK folder")
+
+    all_rows = []
+    processed_files = []  # Track successfully processed files
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_jfk_excel_file(file_content, file_info['name'])
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)  # Track for deletion
+
+    # Insert data with proper week and Total handling
+    if all_rows:
+        with connection.cursor() as cur:
+            # Get unique (month, week) combinations from the new data
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)  # (month, week)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM jfk_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM jfk_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM jfk_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO jfk_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month to keep them separate
+            # Group rows by month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]  # date (YYYYMM)
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM jfk_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.JFK_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_jfk_last_sync():
+    """Get the last JFK sync info"""
+    try:
+        with open(settings.JFK_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+
+# ==================== CCC Functions ====================
+
+def process_ccc_excel_file(file_content, filename):
+    """Process CCC Excel file - reads 'GL PL Period Analysis' sheet and adds CCC division"""
+    # First process using PPG logic
+    rows = process_ppg_excel_file(file_content, filename.replace('CCC', 'PPG'))
+
+    # Replace PPG with CCC in division column
+    return [(("CCC",) + row[1:]) for row in rows]
+
+
+def sync_ccc_data():
+    """Sync CCC data from OneDrive to PostgreSQL - only updates specific weeks, preserves historical data"""
+    print("\n" + "=" * 60)
+    print("Starting CCC OneDrive Sync")
+    print("=" * 60)
+
+    # Get access token
+    token = get_access_token()
+    if not token:
+        raise Exception("Failed to get access token")
+
+    # Get all Excel files from OneDrive folder
+    folder_path = settings.ONEDRIVE_CCC_FOLDER_PATH
+    headers = {'Authorization': f'Bearer {token}'}
+
+    # Get folder ID
+    folder_url = f"https://graph.microsoft.com/v1.0/me/drive/root:{folder_path}"
+    folder_response = requests.get(folder_url, headers=headers)
+
+    if folder_response.status_code != 200:
+        raise Exception(f"Failed to access folder: {folder_response.text}")
+
+    folder_id = folder_response.json()['id']
+
+    # List all files in the folder
+    files_url = f"https://graph.microsoft.com/v1.0/me/drive/items/{folder_id}/children"
+    files_response = requests.get(files_url, headers=headers)
+
+    if files_response.status_code != 200:
+        raise Exception(f"Failed to list files: {files_response.text}")
+
+    files = files_response.json().get('value', [])
+
+    # Filter for Excel files from 2026 (case insensitive extension check)
+    excel_files = [f for f in files if (f['name'].lower().endswith('.xlsx') or f['name'].lower().endswith('.xls')) and '2026' in f['name']]
+
+    if not excel_files:
+        print("No 2026 Excel files found in OneDrive folder")
+        return 0
+
+    print(f"\nFound {len(excel_files)} Excel file(s) with '2026' in name:")
+    for f in excel_files:
+        print(f"  - {f['name']}")
+
+    # Process all files
+    all_rows = []
+    processed_files = []  # Track successfully processed files
+    for file in excel_files:
+        print(f"\nProcessing: {file['name']}")
+
+        # Download file
+        download_url = file['@microsoft.graph.downloadUrl']
+        file_response = requests.get(download_url)
+
+        if file_response.status_code != 200:
+            print(f"  ✗ Failed to download")
+            continue
+
+        # Process file
+        try:
+            rows = process_ccc_excel_file(io.BytesIO(file_response.content), file['name'])
+            print(f"  ✓ Processed {len(rows)} rows")
+            all_rows.extend(rows)
+            processed_files.append(file)  # Track for deletion
+        except Exception as e:
+            print(f"  ✗ Error processing file: {str(e)}")
+            continue
+
+    if not all_rows:
+        print("\n✓ No data to sync")
+        return 0
+
+    print(f"\nTotal rows from all files: {len(all_rows)}")
+
+    # Connect to database using Django connection
+    from django.db import connection
+    with connection.cursor() as cur:
+        # Get unique (month, week) combinations from the new data
+        unique_month_weeks = set((row[3], row[6]) for row in all_rows)  # (month, week)
+        unique_months = set(row[3] for row in all_rows)
+
+        # DEBUG: Show existing weeks before deletion
+        print(f"\n🔍 DEBUG - Before deletion:")
+        for month in sorted(unique_months):
+            cur.execute("""
+                SELECT week, COUNT(*)
+                FROM ccc_pnl
+                WHERE date = %s AND budget_actual = 'Actual'
+                GROUP BY week
+                ORDER BY week
+            """, (month,))
+            weeks = cur.fetchall()
+            if weeks:
+                week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                print(f"  Month {month}: {week_summary}")
+
+        # Show what will be deleted
+        print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+        for month, week in sorted(unique_month_weeks):
+            print(f"  - {month}, {week}")
+
+        # Delete old Actual week records only (Budget stays untouched)
+        # Only delete the specific (month, week) combinations that we're updating
+        for month, week in unique_month_weeks:
+            cur.execute(
+                "DELETE FROM ccc_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                (month, week)
+            )
+        print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+        # Delete old Actual "Total" records only (Budget stays untouched)
+        for month in unique_months:
+            cur.execute(
+                "DELETE FROM ccc_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                (month,)
+            )
+        print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+        # Insert new week data
+        week_query = """
+            INSERT INTO ccc_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+            VALUES %s
+        """
+        execute_values(cur, week_query, all_rows)
+        print(f"  Inserted {len(all_rows)} week records")
+
+        # Duplicate rows as "Total" - separately for each month to keep them separate
+        # Group rows by month
+        from collections import defaultdict
+        rows_by_month = defaultdict(list)
+        for row in all_rows:
+            month = row[3]  # date (YYYYMM)
+            rows_by_month[month].append(row)
+
+        # For each month, duplicate its rows as Total
+        total_count = 0
+        for month, month_rows in rows_by_month.items():
+            total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+            execute_values(cur, week_query, total_rows)
+            total_count += len(total_rows)
+            print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+        print(f"  Total: {total_count} Total records inserted")
+
+        # DEBUG: Show weeks after insertion
+        print(f"\n🔍 DEBUG - After insertion:")
+        for month in sorted(unique_months):
+            cur.execute("""
+                SELECT week, COUNT(*)
+                FROM ccc_pnl
+                WHERE date = %s AND budget_actual = 'Actual'
+                GROUP BY week
+                ORDER BY week
+            """, (month,))
+            weeks = cur.fetchall()
+            if weeks:
+                week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                print(f"  Month {month}: {week_summary}")
+
+        print("\n" + "=" * 60)
+        print("✓ CCC SYNC COMPLETED!")
+        print("=" * 60)
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file in processed_files:
+            delete_url = f"https://graph.microsoft.com/v1.0/me/drive/items/{file['id']}"
+            delete_response = requests.delete(delete_url, headers=headers)
+            if delete_response.status_code == 204:
+                print(f"  ✓ Deleted: {file['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.CCC_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_ccc_last_sync():
+    """Get the last CCC sync info"""
+    try:
+        with open(settings.CCC_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+
+# ==================== CCD Functions ====================
+
+def process_ccd_excel_file(file_content, filename):
+    """Process CCD Excel file - reads 'GL PL Period Analysis' sheet"""
+    rows = process_ppg_excel_file(file_content, filename.replace('CCD', 'PPG'))
+    return [(("CCD",) + row[1:]) for row in rows]
+
+
+def sync_ccd_data():
+    """Sync CCD data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_CCD_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in CCD folder")
+
+    all_rows = []
+    processed_files = []  # Track successfully processed files
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_ccd_excel_file(file_content, file_info['name'])
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)  # Track for deletion
+
+    # Insert data with proper week and Total handling
+    if all_rows:
+        with connection.cursor() as cur:
+            # Get unique (month, week) combinations from the new data
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)  # (month, week)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM ccd_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM ccd_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM ccd_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO ccd_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month to keep them separate
+            # Group rows by month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]  # date (YYYYMM)
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM ccd_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.CCD_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_ccd_last_sync():
+    """Get the last CCD sync info"""
+    try:
+        with open(settings.CCD_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+# ==================== FAX Functions ====================
+
+def process_fax_excel_file(file_content, filename):
+    """Process FAX Excel file - reads 'GL PL Period Analysis' sheet"""
+    rows = process_ppg_excel_file(file_content, filename.replace('FAX', 'PPG'))
+    return [(("FAX",) + row[1:]) for row in rows]
+
+
+def sync_fax_data():
+    """Sync FAX data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_FAX_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in FAX folder")
+
+    all_rows = []
+    processed_files = []  # Track successfully processed files
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_fax_excel_file(file_content, file_info['name'])
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)  # Track for deletion
+
+    # Insert data with proper week and Total handling
+    if all_rows:
+        with connection.cursor() as cur:
+            # Get unique (month, week) combinations from the new data
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)  # (month, week)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM fax_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM fax_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM fax_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO fax_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month to keep them separate
+            # Group rows by month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]  # date (YYYYMM)
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM fax_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.FAX_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_fax_last_sync():
+    """Get the last FAX sync info"""
+    try:
+        with open(settings.FAX_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+# ==================== IMP Functions ====================
+
+def process_imp_excel_file(file_content, filename):
+    """Process IMP Excel file - reads 'GL PL Period Analysis' sheet"""
+    rows = process_ppg_excel_file(file_content, filename.replace('IMP', 'PPG'))
+    return [(("IMP",) + row[1:]) for row in rows]
+
+
+def sync_imp_data():
+    """Sync IMP data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_IMP_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in IMP folder")
+
+    all_rows = []
+    processed_files = []  # Track successfully processed files
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_imp_excel_file(file_content, file_info['name'])
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)  # Track for deletion
+
+    # Insert data with proper week and Total handling
+    if all_rows:
+        with connection.cursor() as cur:
+            # Get unique (month, week) combinations from the new data
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)  # (month, week)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM imp_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM imp_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM imp_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO imp_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month to keep them separate
+            # Group rows by month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]  # date (YYYYMM)
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM imp_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.IMP_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_imp_last_sync():
+    """Get the last IMP sync info"""
+    try:
+        with open(settings.IMP_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+# ==================== HOU Functions ====================
+
+def process_hou_excel_file(file_content, filename):
+    """Process HOU Excel file - reads 'GL PL Period Analysis' sheet"""
+    rows = process_ppg_excel_file(file_content, filename.replace('HOU', 'PPG'))
+    return [(("HOU",) + row[1:]) for row in rows]
+
+
+def sync_hou_data():
+    """Sync HOU data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_HOU_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in HOU folder")
+
+    all_rows = []
+    processed_files = []  # Track successfully processed files
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_hou_excel_file(file_content, file_info['name'])
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)  # Track for deletion
+
+    # Insert data with proper week and Total handling
+    if all_rows:
+        with connection.cursor() as cur:
+            # Get unique (month, week) combinations from the new data
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)  # (month, week)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM hou_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM hou_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM hou_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO hou_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month to keep them separate
+            # Group rows by month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]  # date (YYYYMM)
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM hou_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.HOU_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_hou_last_sync():
+    """Get the last HOU sync info"""
+    try:
+        with open(settings.HOU_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+# ==================== ICS Functions ====================
+
+def process_ics_excel_file(file_content, filename):
+    """Process ICS Excel file - reads 'GL PL Period Analysis' sheet"""
+    rows = process_ppg_excel_file(file_content, filename.replace('ICS', 'PPG'))
+    return [(("ICS",) + row[1:]) for row in rows]
+
+
+def sync_ics_data():
+    """Sync ICS data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_ICS_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in ICS folder")
+
+    all_rows = []
+    processed_files = []  # Track successfully processed files
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_ics_excel_file(file_content, file_info['name'])
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)  # Track for deletion
+
+    # Insert data with proper week and Total handling
+    if all_rows:
+        with connection.cursor() as cur:
+            # Get unique (month, week) combinations from the new data
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)  # (month, week)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM ics_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM ics_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM ics_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO ics_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month to keep them separate
+            # Group rows by month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]  # date (YYYYMM)
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM ics_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.ICS_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_ics_last_sync():
+    """Get the last ICS sync info"""
+    try:
+        with open(settings.ICS_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+# ==================== LAX Functions ====================
+
+def process_lax_excel_file(file_content, filename):
+    """Process LAX Excel file - reads 'GL PL Period Analysis' sheet"""
+    rows = process_ppg_excel_file(file_content, filename.replace('LAX', 'PPG'))
+    return [(("LAX",) + row[1:]) for row in rows]
+
+
+def sync_lax_data():
+    """Sync LAX data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_LAX_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in LAX folder")
+
+    all_rows = []
+    processed_files = []  # Track successfully processed files
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_lax_excel_file(file_content, file_info['name'])
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)  # Track for deletion
+
+    # Insert data with proper week and Total handling
+    if all_rows:
+        with connection.cursor() as cur:
+            # Get unique (month, week) combinations from the new data
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)  # (month, week)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM lax_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM lax_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM lax_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO lax_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month to keep them separate
+            # Group rows by month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]  # date (YYYYMM)
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM lax_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.LAX_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_lax_last_sync():
+    """Get the last LAX sync info"""
+    try:
+        with open(settings.LAX_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+# ==================== LCL Functions ====================
+
+def process_lcl_excel_file(file_content, filename):
+    """Process LCL Excel file - reads 'GL PL Period Analysis' sheet"""
+    rows = process_ppg_excel_file(file_content, filename.replace('LCL', 'PPG'))
+    return [(("LCL",) + row[1:]) for row in rows]
+
+
+def sync_lcl_data():
+    """Sync LCL data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_LCL_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in LCL folder")
+
+    all_rows = []
+    processed_files = []  # Track successfully processed files
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_lcl_excel_file(file_content, file_info['name'])
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)  # Track for deletion
+
+    # Insert data with proper week and Total handling
+    if all_rows:
+        with connection.cursor() as cur:
+            # Get unique (month, week) combinations from the new data
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)  # (month, week)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM lcl_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM lcl_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM lcl_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO lcl_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month to keep them separate
+            # Group rows by month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]  # date (YYYYMM)
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM lcl_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.LCL_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_lcl_last_sync():
+    """Get the last LCL sync info"""
+    try:
+        with open(settings.LCL_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+# ==================== ORD Functions ====================
+
+def process_ord_excel_file(file_content, filename):
+    """Process ORD Excel file - reads 'GL PL Period Analysis' sheet"""
+    rows = process_ppg_excel_file(file_content, filename.replace('ORD', 'PPG'))
+    return [(("ORD",) + row[1:]) for row in rows]
+
+
+def sync_ord_data():
+    """Sync ORD data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_ORD_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in ORD folder")
+
+    all_rows = []
+    processed_files = []  # Track successfully processed files
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_ord_excel_file(file_content, file_info['name'])
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)  # Track for deletion
+
+    # Insert data with proper week and Total handling
+    if all_rows:
+        with connection.cursor() as cur:
+            # Get unique (month, week) combinations from the new data
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)  # (month, week)
+            unique_months = set(row[3] for row in all_rows)
+
+            # DEBUG: Show existing weeks before deletion
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM ord_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            # Show what will be deleted
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            # Delete old Actual week records only (Budget stays untouched)
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM ord_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            # Delete old Actual "Total" records only (Budget stays untouched)
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM ord_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Insert new week data
+            week_query = """
+                INSERT INTO ord_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            # Duplicate rows as "Total" - separately for each month to keep them separate
+            # Group rows by month
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                month = row[3]  # date (YYYYMM)
+                rows_by_month[month].append(row)
+
+            # For each month, duplicate its rows as Total
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            # DEBUG: Show existing weeks after insertion
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM ord_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat()}
+    with open(settings.ORD_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_ord_last_sync():
+    """Get the last ORD sync info"""
+    try:
+        with open(settings.ORD_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None

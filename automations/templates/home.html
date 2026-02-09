@@ -142,73 +142,289 @@
         </div>
     </a>
 
-    <a href="{% url 'pnl' %}" class="project-card">
+    <a href="{% url 'atl' %}" class="project-card">
         <div class="project-header">
             <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zm-6-1h2V9h-2v6zm-4 0h2v-4h-2v4zm8 0h2V7h-2v8z"/></svg>
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
             </div>
             <div class="project-info">
-                <h3 class="project-title">Atlantics Financial Report</h3>
+                <h3 class="project-title">ATL Financial Analysis</h3>
                 <span class="project-status">Active</span>
             </div>
         </div>
-        <p class="project-description">Profit & Loss budget vs actual data for Power BI reporting.</p>
+        <p class="project-description">ATL Budget vs Actual P&L data for Power BI reporting.</p>
         <div class="project-stats">
             <div class="stat">
-                <span class="stat-value">{{ pnl_rows|default:"--" }}</span>
+                <span class="stat-value">{{ atl_rows|default:"--" }}</span>
                 <span class="stat-label">Records</span>
-            </div>
-            <div class="stat">
-                <span class="stat-value">{{ pnl_divisions|default:"--" }}</span>
-                <span class="stat-label">Divisions</span>
             </div>
         </div>
     </a>
 
-    <div class="project-card disabled">
+    <a href="{% url 'ccc' %}" class="project-card">
         <div class="project-header">
-            <div class="project-icon" style="background: #a19f9d;">
-                <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
             </div>
             <div class="project-info">
-                <h3 class="project-title">Claims Management</h3>
-                <span class="project-status coming-soon">Coming soon</span>
+                <h3 class="project-title">CCC Financial Analysis</h3>
+                <span class="project-status">Active</span>
             </div>
         </div>
-        <p class="project-description">Automated claims processing and tracking system.</p>
+        <p class="project-description">CCC Budget vs Actual P&L data for Power BI reporting.</p>
         <div class="project-stats">
             <div class="stat">
-                <span class="stat-value">--</span>
-                <span class="stat-label">Claims</span>
-            </div>
-            <div class="stat">
-                <span class="stat-value">--</span>
-                <span class="stat-label">Pending</span>
+                <span class="stat-value">{{ ccc_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
             </div>
         </div>
-    </div>
+    </a>
 
-    <div class="project-card disabled">
+    <a href="{% url 'ccd' %}" class="project-card">
         <div class="project-header">
-            <div class="project-icon" style="background: #a19f9d;">
-                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4 6h-4v2h4v2h-4v2h4v2H9V7h6v2z"/></svg>
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
             </div>
             <div class="project-info">
-                <h3 class="project-title">Invoice Automation</h3>
-                <span class="project-status coming-soon">Coming soon</span>
+                <h3 class="project-title">CCD Financial Analysis</h3>
+                <span class="project-status">Active</span>
             </div>
         </div>
-        <p class="project-description">Automated invoice generation and distribution.</p>
+        <p class="project-description">CCD Budget vs Actual P&L data for Power BI reporting.</p>
         <div class="project-stats">
             <div class="stat">
-                <span class="stat-value">--</span>
-                <span class="stat-label">Invoices</span>
-            </div>
-            <div class="stat">
-                <span class="stat-value">--</span>
-                <span class="stat-label">This month</span>
+                <span class="stat-value">{{ ccd_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
             </div>
         </div>
-    </div>
+    </a>
+
+    <a href="{% url 'con' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">CON Financial Analysis</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">CON Budget vs Actual P&L data for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ con_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'dor' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">DOR Financial Analysis</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">DOR Budget vs Actual P&L data for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ dor_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'fax' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">FAX Financial Analysis</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">FAX Budget vs Actual P&L data for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ fax_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'hnl' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">HNL Financial Analysis</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">HNL Budget vs Actual P&L data for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ hnl_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'hou' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">HOU Financial Analysis</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">HOU Budget vs Actual P&L data for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ hou_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'ics' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">ICS Financial Analysis</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">ICS Budget vs Actual P&L data for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ ics_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'imp' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">IMP Financial Analysis</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">IMP Budget vs Actual P&L data for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ imp_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'jfk' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">JFK Financial Analysis</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">JFK Budget vs Actual P&L data for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ jfk_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'lax' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">LAX Financial Analysis</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">LAX Budget vs Actual P&L data for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ lax_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'lcl' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">LCL Financial Analysis</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">LCL Budget vs Actual P&L data for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ lcl_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'ord' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">ORD Financial Analysis</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">ORD Budget vs Actual P&L data for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ ord_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'ppg' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">PPG Financial Analysis</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">PPG Budget vs Actual P&L data for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ ppg_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+        </div>
+    </a>
 </div>
 {% endblock %}

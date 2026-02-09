@@ -81,6 +81,25 @@
             list-style: none;
             padding: 8px 0;
             flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .sidebar-menu::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar-menu::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .sidebar-menu::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+        }
+
+        .sidebar-menu::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.3);
         }
 
         .sidebar-menu li {
@@ -190,11 +209,123 @@
                 </a>
             </li>
             <li>
-                <a href="{% url 'pnl' %}" class="{% if request.resolver_match.url_name == 'pnl' %}active{% endif %}">
+                <a href="{% url 'atl' %}" class="{% if request.resolver_match.url_name == 'atl' %}active{% endif %}">
                     <span class="icon">
-                        <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zm-6-1h2V9h-2v6zm-4 0h2v-4h-2v4zm8 0h2V7h-2v8z"/></svg>
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
                     </span>
-                    <span class="label">Atlantics</span>
+                    <span class="label">ATL</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'ccc' %}" class="{% if request.resolver_match.url_name == 'ccc' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">CCC</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'ccd' %}" class="{% if request.resolver_match.url_name == 'ccd' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">CCD</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'con' %}" class="{% if request.resolver_match.url_name == 'con' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">CON</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'dor' %}" class="{% if request.resolver_match.url_name == 'dor' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">DOR</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'fax' %}" class="{% if request.resolver_match.url_name == 'fax' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">FAX</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'hnl' %}" class="{% if request.resolver_match.url_name == 'hnl' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">HNL</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'hou' %}" class="{% if request.resolver_match.url_name == 'hou' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">HOU</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'ics' %}" class="{% if request.resolver_match.url_name == 'ics' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">ICS</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'imp' %}" class="{% if request.resolver_match.url_name == 'imp' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">IMP</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'jfk' %}" class="{% if request.resolver_match.url_name == 'jfk' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">JFK</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'lax' %}" class="{% if request.resolver_match.url_name == 'lax' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">LAX</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'lcl' %}" class="{% if request.resolver_match.url_name == 'lcl' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">LCL</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'ord' %}" class="{% if request.resolver_match.url_name == 'ord' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">ORD</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'ppg' %}" class="{% if request.resolver_match.url_name == 'ppg' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    </span>
+                    <span class="label">PPG</span>
                 </a>
             </li>
         </ul>
