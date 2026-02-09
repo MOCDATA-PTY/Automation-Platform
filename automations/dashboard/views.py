@@ -6,10 +6,15 @@ from django.db.models import Sum, Count
 from django.db.models.functions import ExtractYear
 from django.db import OperationalError, ProgrammingError, connection
 from django.http import JsonResponse
+from django.conf import settings as django_settings
 from .models import TurnoverData
 from .google_drive import sync_google_drive_data, get_progress, update_progress, get_last_sync
 from . import onedrive_sync
 import threading
+import json
+import os
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 
 def login_view(request):
@@ -1355,3 +1360,125 @@ def sync_ord(request):
 def sync_ord_progress(request):
     """Get ORD sync progress"""
     return JsonResponse(ord_sync_progress)
+
+
+# --- Sync Monitor ---
+
+STATIONS = [
+    'atl', 'ccc', 'ccd', 'con', 'dor', 'fax',
+    'hnl', 'hou', 'ics', 'imp', 'jfk', 'lax',
+    'lcl', 'ord', 'ppg',
+]
+
+
+def _get_station_statuses():
+    """Build station status list for the monitor page."""
+    now = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    one_hour_ago = now - timedelta(hours=1)
+
+    # Load health data
+    health_data = {}
+    try:
+        health_file = django_settings.SYNC_HEALTH_FILE
+        if os.path.exists(health_file):
+            with open(health_file, 'r') as f:
+                health_data = json.load(f)
+    except Exception:
+        pass
+
+    stations = []
+    healthy_count = 0
+    stale_count = 0
+    error_count = 0
+
+    for station in STATIONS:
+        # Read last_sync timestamp
+        sync_file = getattr(django_settings, f'{station.upper()}_LAST_SYNC_FILE', None)
+        last_sync_dt = None
+        last_sync_display = None
+
+        if sync_file and os.path.exists(sync_file):
+            try:
+                with open(sync_file, 'r') as f:
+                    data = json.load(f)
+                if 'last_sync' in data:
+                    last_sync_dt = datetime.fromisoformat(data['last_sync'])
+                    last_sync_display = {
+                        'time': last_sync_dt.strftime('%H:%M'),
+                        'date': last_sync_dt.strftime('%b %d, %Y'),
+                    }
+            except Exception:
+                pass
+
+        # Read health info
+        health = health_data.get(station, {})
+        health_status = health.get('status', 'unknown')
+        health_message = health.get('message', '')
+        records = health.get('records', 0)
+
+        # Determine overall status
+        if health_status == 'error':
+            status = 'error'
+            error_count += 1
+        elif last_sync_dt is None:
+            status = 'unknown'
+            stale_count += 1
+        elif last_sync_dt < one_hour_ago:
+            status = 'stale'
+            stale_count += 1
+        else:
+            status = 'healthy'
+            healthy_count += 1
+
+        # Time ago string
+        time_ago = None
+        if last_sync_dt:
+            delta = now - last_sync_dt
+            minutes = int(delta.total_seconds() / 60)
+            if minutes < 1:
+                time_ago = 'Just now'
+            elif minutes < 60:
+                time_ago = f'{minutes}m ago'
+            elif minutes < 1440:
+                time_ago = f'{minutes // 60}h {minutes % 60}m ago'
+            else:
+                time_ago = f'{minutes // 1440}d ago'
+
+        stations.append({
+            'code': station.upper(),
+            'code_lower': station,
+            'last_sync': last_sync_display,
+            'time_ago': time_ago,
+            'status': status,
+            'health_status': health_status,
+            'message': health_message,
+            'records': records,
+        })
+
+    return stations, healthy_count, stale_count, error_count
+
+
+@login_required
+def sync_monitor(request):
+    """Sync Monitor page"""
+    stations, healthy, stale, errors = _get_station_statuses()
+    context = {
+        'stations': stations,
+        'healthy_count': healthy,
+        'stale_count': stale,
+        'error_count': errors,
+        'total_stations': len(STATIONS),
+    }
+    return render(request, 'monitor.html', context)
+
+
+@login_required
+def sync_monitor_api(request):
+    """JSON API for auto-refresh of monitor data"""
+    stations, healthy, stale, errors = _get_station_statuses()
+    return JsonResponse({
+        'stations': stations,
+        'healthy_count': healthy,
+        'stale_count': stale,
+        'error_count': errors,
+    })

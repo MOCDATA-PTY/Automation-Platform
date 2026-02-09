@@ -1,11 +1,39 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from django.conf import settings
+import json
+import os
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
 scheduler = None
+
+
+def update_sync_health(station, status, message, records=0):
+    """Write sync health info for a station to sync_health.json"""
+    try:
+        health_file = settings.SYNC_HEALTH_FILE
+        if os.path.exists(health_file):
+            with open(health_file, 'r') as f:
+                health_data = json.load(f)
+        else:
+            health_data = {}
+
+        local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+        health_data[station] = {
+            'last_check': local_time.isoformat(),
+            'status': status,
+            'message': message,
+            'records': records,
+        }
+
+        with open(health_file, 'w') as f:
+            json.dump(health_data, f, indent=2)
+    except Exception as e:
+        logger.error(f"Failed to update sync health for {station}: {e}")
 
 
 def run_sync_job():
@@ -18,9 +46,11 @@ def run_sync_job():
         count = onedrive_sync.sync_turnover_data()
         logger.info(f"Scheduled sync complete: {count} records synced")
         update_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('turnover', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled sync error: {e}")
         update_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('turnover', 'error', str(e))
 
 
 def run_ppg_sync_job():
@@ -33,9 +63,11 @@ def run_ppg_sync_job():
         count = onedrive_sync.sync_ppg_data()
         logger.info(f"Scheduled PPG sync complete: {count} records synced")
         update_ppg_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('ppg', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled PPG sync error: {e}")
         update_ppg_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('ppg', 'error', str(e))
 
 
 def run_dor_sync_job():
@@ -48,9 +80,11 @@ def run_dor_sync_job():
         count = onedrive_sync.sync_dor_data()
         logger.info(f"Scheduled DOR sync complete: {count} records synced")
         update_dor_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('dor', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled DOR sync error: {e}")
         update_dor_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('dor', 'error', str(e))
 
 
 def run_con_sync_job():
@@ -63,9 +97,11 @@ def run_con_sync_job():
         count = onedrive_sync.sync_con_data()
         logger.info(f"Scheduled CON sync complete: {count} records synced")
         update_con_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('con', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled CON sync error: {e}")
         update_con_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('con', 'error', str(e))
 
 
 def run_ccd_sync_job():
@@ -78,9 +114,11 @@ def run_ccd_sync_job():
         count = onedrive_sync.sync_ccd_data()
         logger.info(f"Scheduled CCD sync complete: {count} records synced")
         update_ccd_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('ccd', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled CCD sync error: {e}")
         update_ccd_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('ccd', 'error', str(e))
 
 
 def run_atl_sync_job():
@@ -93,9 +131,11 @@ def run_atl_sync_job():
         count = onedrive_sync.sync_atl_data()
         logger.info(f"Scheduled ATL sync complete: {count} records synced")
         update_atl_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('atl', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled ATL sync error: {e}")
         update_atl_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('atl', 'error', str(e))
 
 
 def run_ccc_sync_job():
@@ -108,9 +148,11 @@ def run_ccc_sync_job():
         count = onedrive_sync.sync_ccc_data()
         logger.info(f"Scheduled CCC sync complete: {count} records synced")
         update_ccc_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('ccc', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled CCC sync error: {e}")
         update_ccc_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('ccc', 'error', str(e))
 
 
 def run_hnl_sync_job():
@@ -123,9 +165,11 @@ def run_hnl_sync_job():
         count = onedrive_sync.sync_hnl_data()
         logger.info(f"Scheduled HNL sync complete: {count} records synced")
         update_hnl_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('hnl', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled HNL sync error: {e}")
         update_hnl_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('hnl', 'error', str(e))
 
 
 def run_jfk_sync_job():
@@ -138,9 +182,11 @@ def run_jfk_sync_job():
         count = onedrive_sync.sync_jfk_data()
         logger.info(f"Scheduled JFK sync complete: {count} records synced")
         update_jfk_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('jfk', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled JFK sync error: {e}")
         update_jfk_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('jfk', 'error', str(e))
 
 
 def run_fax_sync_job():
@@ -153,9 +199,11 @@ def run_fax_sync_job():
         count = onedrive_sync.sync_fax_data()
         logger.info(f"Scheduled FAX sync complete: {count} records synced")
         update_fax_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('fax', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled FAX sync error: {e}")
         update_fax_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('fax', 'error', str(e))
 
 
 def run_hou_sync_job():
@@ -168,9 +216,11 @@ def run_hou_sync_job():
         count = onedrive_sync.sync_hou_data()
         logger.info(f"Scheduled HOU sync complete: {count} records synced")
         update_hou_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('hou', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled HOU sync error: {e}")
         update_hou_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('hou', 'error', str(e))
 
 
 def run_ics_sync_job():
@@ -183,9 +233,11 @@ def run_ics_sync_job():
         count = onedrive_sync.sync_ics_data()
         logger.info(f"Scheduled ICS sync complete: {count} records synced")
         update_ics_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('ics', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled ICS sync error: {e}")
         update_ics_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('ics', 'error', str(e))
 
 
 def run_imp_sync_job():
@@ -198,9 +250,11 @@ def run_imp_sync_job():
         count = onedrive_sync.sync_imp_data()
         logger.info(f"Scheduled IMP sync complete: {count} records synced")
         update_imp_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('imp', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled IMP sync error: {e}")
         update_imp_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('imp', 'error', str(e))
 
 
 def run_lax_sync_job():
@@ -213,9 +267,11 @@ def run_lax_sync_job():
         count = onedrive_sync.sync_lax_data()
         logger.info(f"Scheduled LAX sync complete: {count} records synced")
         update_lax_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('lax', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled LAX sync error: {e}")
         update_lax_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('lax', 'error', str(e))
 
 
 def run_lcl_sync_job():
@@ -228,9 +284,11 @@ def run_lcl_sync_job():
         count = onedrive_sync.sync_lcl_data()
         logger.info(f"Scheduled LCL sync complete: {count} records synced")
         update_lcl_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('lcl', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled LCL sync error: {e}")
         update_lcl_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('lcl', 'error', str(e))
 
 
 def run_ord_sync_job():
@@ -243,9 +301,11 @@ def run_ord_sync_job():
         count = onedrive_sync.sync_ord_data()
         logger.info(f"Scheduled ORD sync complete: {count} records synced")
         update_ord_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('ord', 'success', f'Synced {count} records', count)
     except Exception as e:
         logger.error(f"Scheduled ORD sync error: {e}")
         update_ord_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('ord', 'error', str(e))
 
 
 def refresh_onedrive_token():
