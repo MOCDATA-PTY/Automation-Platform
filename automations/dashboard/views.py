@@ -78,11 +78,37 @@ def home(request):
         except:
             station_rows[f'{key}_rows'] = 0
 
+    # Creditor stats
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM creditor_transactions")
+            creditor_rows = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(DISTINCT creditor_group) FROM creditor_transactions")
+            creditor_groups = cursor.fetchone()[0]
+    except:
+        creditor_rows = 0
+        creditor_groups = 0
+
+    # Condor+DOR stats
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM condor_dor_pnl")
+            condor_rows = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(DISTINCT department) FROM condor_dor_pnl")
+            condor_depts = cursor.fetchone()[0]
+    except:
+        condor_rows = 0
+        condor_depts = 0
+
     context = {
         'total_rows': total_rows,
         'branch_count': branch_count,
         'pnl_rows': pnl_rows,
         'pnl_divisions': pnl_divisions,
+        'creditor_rows': creditor_rows,
+        'creditor_groups': creditor_groups,
+        'condor_rows': condor_rows,
+        'condor_depts': condor_depts,
         **station_rows,
     }
     return render(request, 'home.html', context)
@@ -1362,9 +1388,82 @@ def sync_ord_progress(request):
     return JsonResponse(ord_sync_progress)
 
 
+@login_required
+def creditor(request):
+    """Creditor Transaction Report page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM creditor_transactions")
+            total_records = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(DISTINCT creditor) FROM creditor_transactions")
+            creditor_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(DISTINCT creditor_group) FROM creditor_transactions")
+            group_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(DISTINCT branch) FROM creditor_transactions WHERE branch != ''")
+            branch_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(DISTINCT period) FROM creditor_transactions")
+            period_count = cursor.fetchone()[0]
+    except:
+        total_records = 0
+        creditor_count = 0
+        group_count = 0
+        branch_count = 0
+        period_count = 0
+
+    context = {
+        'total_records': total_records,
+        'creditor_count': creditor_count,
+        'group_count': group_count,
+        'branch_count': branch_count,
+        'period_count': period_count,
+    }
+    return render(request, 'creditor.html', context)
+
+
+@login_required
+def condor_dor(request):
+    """Condor+DOR PNL page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM condor_dor_pnl")
+            total_records = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(DISTINCT department) FROM condor_dor_pnl")
+            dept_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(DISTINCT branch) FROM condor_dor_pnl")
+            branch_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM condor_dor_pnl")
+            account_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(DISTINCT date) FROM condor_dor_pnl")
+            period_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM condor_dor_pnl WHERE budget_actual = 'Budget'")
+            budget_rows = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM condor_dor_pnl WHERE budget_actual = 'Actual'")
+            actual_rows = cursor.fetchone()[0]
+    except:
+        total_records = 0
+        dept_count = 0
+        branch_count = 0
+        account_count = 0
+        period_count = 0
+        budget_rows = 0
+        actual_rows = 0
+
+    context = {
+        'total_records': total_records,
+        'dept_count': dept_count,
+        'branch_count': branch_count,
+        'account_count': account_count,
+        'period_count': period_count,
+        'budget_rows': budget_rows,
+        'actual_rows': actual_rows,
+    }
+    return render(request, 'condor_dor.html', context)
+
+
 # --- Sync Monitor ---
 
 STATIONS = [
+    'turnover', 'creditor', 'condor_dor',
     'atl', 'ccc', 'ccd', 'con', 'dor', 'fax',
     'hnl', 'hou', 'ics', 'imp', 'jfk', 'lax',
     'lcl', 'ord', 'ppg',

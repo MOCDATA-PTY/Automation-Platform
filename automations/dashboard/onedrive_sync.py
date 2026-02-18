@@ -4,6 +4,7 @@ import json
 import io
 import re
 from datetime import datetime
+from decimal import Decimal
 import msal
 import requests
 from django.conf import settings
@@ -1649,11 +1650,11 @@ def sync_ccc_data():
 
     files = files_response.json().get('value', [])
 
-    # Filter for Excel files from 2026 (case insensitive extension check)
-    excel_files = [f for f in files if (f['name'].lower().endswith('.xlsx') or f['name'].lower().endswith('.xls')) and '2026' in f['name']]
+    # Filter for Excel files (case insensitive extension check)
+    excel_files = [f for f in files if f['name'].lower().endswith('.xlsx') or f['name'].lower().endswith('.xls')]
 
     if not excel_files:
-        print("No 2026 Excel files found in OneDrive folder")
+        print("No Excel files found in CCC folder")
         return 0
 
     print(f"\nFound {len(excel_files)} Excel file(s) with '2026' in name:")
@@ -3079,6 +3080,340 @@ def get_ord_last_sync():
     """Get the last ORD sync info"""
     try:
         with open(settings.ORD_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+
+def sync_creditor_data():
+    """Sync all creditor group files from OneDrive to PostgreSQL"""
+    groups = ['AGT', 'AIR', 'ASC', 'ATT', 'AUS', 'CRE', 'EMP', 'HR', 'INT', 'OH', 'SSL', 'TPY', 'TRU', 'X2']
+    grand_total = 0
+
+    for group in groups:
+        folder_path = f'/Automation Platform/Creditor Report/{group}'
+        files = list_files_in_folder(folder_path)
+        excel_files = [f for f in files if f['name'].lower().endswith(('.xlsx', '.xls'))]
+
+        if not excel_files:
+            print(f'{group}: No file')
+            continue
+
+        # Prefer 'Creditor Transaction Report' files over other files
+        ctr_files = [f for f in excel_files if 'creditor transaction report' in f['name'].lower()]
+        file_info = ctr_files[0] if ctr_files else excel_files[0]
+        print(f'{group}: Downloading {file_info["name"]}')
+        content = download_file(file_info['id'])
+
+        if not content:
+            print(f'{group}: Download failed')
+            continue
+
+        raw_bytes = content.read()
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), data_only=True)
+            ws = wb.active
+            max_row = ws.max_row
+            max_col = ws.max_column
+            def cell(r, c, _ws=ws):
+                return _ws.cell(row=r, column=c).value
+        except Exception:
+            try:
+                wbx = xlrd.open_workbook(file_contents=raw_bytes)
+                wsx = wbx.sheet_by_index(0)
+                max_row = wsx.nrows
+                max_col = wsx.ncols
+                def cell(r, c, _wsx=wsx):
+                    if r-1 < _wsx.nrows and c-1 < _wsx.ncols:
+                        v = _wsx.cell_value(r-1, c-1)
+                        return v if v != '' else None
+                    return None
+            except Exception as e:
+                print(f'{group}: Error opening file - {e}')
+                continue
+
+        # Get period columns from row 8
+        periods = []
+        for col_idx in range(5, max_col + 1):
+            v = cell(8, col_idx)
+            if v is not None:
+                vs = str(v).strip().split('.')[0]
+                if re.match(r'^\d{6}$', vs):
+                    periods.append((col_idx, vs))
+
+        if not periods:
+            print(f'{group}: No period columns')
+            continue
+
+        current_branch = ''
+        all_rows = []
+        for row_idx in range(9, max_row + 1):
+            col_b = cell(row_idx, 2)
+            if col_b is None:
+                continue
+            col_b = str(col_b).strip()
+            if col_b.startswith('Organization Branch:'):
+                match = re.search(r'\(([^)]*)\)', col_b)
+                current_branch = match.group(1) if match else ''
+                continue
+            if 'Total' in col_b or 'Grand' in col_b or col_b == '':
+                continue
+            creditor = col_b
+            creditor_name = str(cell(row_idx, 3) or '').strip()
+            if not creditor_name:
+                continue
+            for col_idx, period in periods:
+                val = cell(row_idx, col_idx)
+                if val is not None and str(val).strip() != '':
+                    try:
+                        from decimal import Decimal
+                        value = Decimal(str(val).replace(',', ''))
+                    except Exception:
+                        continue
+                    all_rows.append((creditor, creditor_name, period, value, group, current_branch))
+
+        if all_rows:
+            periods_in_data = sorted(set(r[2] for r in all_rows))
+            with connection.cursor() as cursor:
+                for period in periods_in_data:
+                    cursor.execute(
+                        "DELETE FROM creditor_transactions WHERE creditor_group = %s AND period = %s",
+                        (group, period)
+                    )
+                execute_values(
+                    cursor,
+                    "INSERT INTO creditor_transactions (creditor, creditor_name, period, value, creditor_group, branch) VALUES %s",
+                    all_rows
+                )
+            print(f'{group}: Inserted {len(all_rows)} rows')
+            grand_total += len(all_rows)
+        else:
+            print(f'{group}: No data rows')
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    sync_data = {'last_sync': local_time.isoformat()}
+    with open(settings.CREDITOR_LAST_SYNC_FILE, 'w') as f:
+        json.dump(sync_data, f)
+
+    print(f'Creditor sync complete: {grand_total} total rows')
+    return grand_total
+
+
+def sync_condor_dor_data():
+    """Sync Condor+DOR PNL data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_CONDOR_DOR_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in Condor+DOR folder")
+
+    # Map filenames to department and branch
+    FILE_MAP = {
+        'CON': ('CON', 'CON'),
+        'DOR BRK': ('BRK', 'DOR'),
+        'DOR FEA': ('FEA', 'DOR'),
+        'DOR TRX': ('TRX', 'DOR'),
+    }
+
+    grand_total = 0
+
+    for file_info in excel_files:
+        fname = file_info['name']
+        print(f"Processing {fname}...")
+
+        # Determine department and branch from filename
+        department = None
+        branch = None
+        for key, (dept, br) in FILE_MAP.items():
+            if key in fname.upper() or key in fname:
+                department = dept
+                branch = br
+                break
+
+        if not department:
+            print(f"  Skipping - cannot determine department from filename")
+            continue
+
+        print(f"  Department: {department}, Branch: {branch}")
+
+        file_content = download_file(file_info['id'])
+        if not file_content:
+            print(f"  Failed to download")
+            continue
+
+        # Read raw bytes
+        if hasattr(file_content, 'read'):
+            file_content.seek(0)
+            raw = file_content.read()
+        else:
+            raw = file_content
+
+        # Try openpyxl first, fall back to xlrd
+        ws_data = None
+        try:
+            import io as _io
+            wb = openpyxl.load_workbook(_io.BytesIO(raw), data_only=True)
+            sheet_name = 'GL PL Period Analysis' if 'GL PL Period Analysis' in wb.sheetnames else wb.sheetnames[0]
+            ws = wb[sheet_name]
+            print(f"  Opened with openpyxl - Sheet: {sheet_name}")
+
+            # Find header row with period columns (YYYYMM)
+            header_row_idx = None
+            for row_idx in range(1, min(20, ws.max_row + 1)):
+                for col in range(1, min(60, ws.max_column + 1)):
+                    val = ws.cell(row=row_idx, column=col).value
+                    if isinstance(val, (int, float)) and 202000 <= val <= 209999:
+                        header_row_idx = row_idx
+                        break
+                if header_row_idx:
+                    break
+
+            if header_row_idx is None:
+                print(f"  Error: Could not find header row with period columns")
+                continue
+
+            # Get period columns (first occurrence of each)
+            month_columns = []
+            seen = set()
+            for col in range(1, min(60, ws.max_column + 1)):
+                val = ws.cell(row=header_row_idx, column=col).value
+                if isinstance(val, (int, float)) and 202000 <= val <= 209999:
+                    m = int(val)
+                    if m not in seen:
+                        month_columns.append((col, m))
+                        seen.add(m)
+
+            print(f"  Found {len(month_columns)} periods")
+
+            # Parse data rows
+            rows = []
+            for row_idx in range(header_row_idx + 1, ws.max_row + 1):
+                account_name = ws.cell(row=row_idx, column=3).value
+                if not account_name:
+                    continue
+                account_name = str(account_name).strip()
+
+                for col, period in month_columns:
+                    value = ws.cell(row=row_idx, column=col).value
+                    if value is not None and isinstance(value, (int, float)):
+                        date_str = str(period)
+                        date_fixed = yyyymm_to_date(period)
+                        rows.append((department, account_name, value, date_str, date_fixed, branch, 'Actual'))
+            ws_data = rows
+
+        except Exception as e:
+            print(f"  openpyxl failed: {e}, trying xlrd...")
+            try:
+                wb = xlrd.open_workbook(file_contents=raw)
+                sheet_name = 'GL PL Period Analysis' if 'GL PL Period Analysis' in wb.sheet_names() else wb.sheet_names()[0]
+                ws = wb.sheet_by_name(sheet_name)
+                print(f"  Opened with xlrd - Sheet: {sheet_name}, rows={ws.nrows}")
+
+                # Find header row with period columns
+                header_row_idx = None
+                for row_idx in range(min(20, ws.nrows)):
+                    for col_idx in range(min(60, ws.ncols)):
+                        val = ws.cell_value(row_idx, col_idx)
+                        if isinstance(val, (int, float)) and 202000 <= val <= 209999:
+                            header_row_idx = row_idx
+                            break
+                    if header_row_idx is not None:
+                        break
+
+                if header_row_idx is None:
+                    print(f"  Error: Could not find header row with period columns")
+                    continue
+
+                # Get period columns
+                month_columns = []
+                seen = set()
+                for col_idx in range(min(60, ws.ncols)):
+                    val = ws.cell_value(header_row_idx, col_idx)
+                    if isinstance(val, (int, float)) and 202000 <= val <= 209999:
+                        m = int(val)
+                        if m not in seen:
+                            month_columns.append((col_idx, m))
+                            seen.add(m)
+
+                print(f"  Found {len(month_columns)} periods")
+
+                # Parse data rows
+                rows = []
+                for row_idx in range(header_row_idx + 1, ws.nrows):
+                    account_name = ws.cell_value(row_idx, 2) if ws.ncols > 2 else None
+                    if not account_name:
+                        continue
+                    account_name = str(account_name).strip()
+
+                    for col_idx, period in month_columns:
+                        if col_idx >= ws.ncols:
+                            continue
+                        value = ws.cell_value(row_idx, col_idx)
+                        if value is not None and isinstance(value, (int, float)):
+                            date_str = str(period)
+                            date_fixed = yyyymm_to_date(period)
+                            rows.append((department, account_name, value, date_str, date_fixed, branch, 'Actual'))
+                ws_data = rows
+
+            except Exception as e2:
+                print(f"  xlrd also failed: {e2}")
+                continue
+
+        if not ws_data:
+            print(f"  No data extracted")
+            continue
+
+        # Get unique periods from this file
+        periods = set(r[3] for r in ws_data)
+        print(f"  Extracted {len(ws_data)} rows across {len(periods)} periods")
+
+        # Delete existing Actual data for this department+branch+periods, then insert
+        with connection.cursor() as cur:
+            for period in periods:
+                cur.execute(
+                    "DELETE FROM condor_dor_pnl WHERE department = %s AND branch = %s AND date = %s AND budget_actual = 'Actual'",
+                    (department, branch, period)
+                )
+            print(f"  Deleted old Actual data for {department}/{branch}")
+
+            execute_values(
+                cur,
+                "INSERT INTO condor_dor_pnl (department, account_name, value, date, date_fixed, branch, budget_actual) VALUES %s",
+                ws_data
+            )
+            print(f"  Inserted {len(ws_data)} rows")
+
+        grand_total += len(ws_data)
+
+    # Save last sync time
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    sync_data = {'last_sync': local_time.isoformat()}
+    with open(settings.CONDOR_DOR_LAST_SYNC_FILE, 'w') as f:
+        json.dump(sync_data, f)
+
+    print(f"\nCondor+DOR sync complete: {grand_total} total rows")
+    return grand_total
+
+
+def get_condor_dor_last_sync():
+    """Get the last Condor+DOR sync info"""
+    try:
+        with open(settings.CONDOR_DOR_LAST_SYNC_FILE, 'r') as f:
             data = json.load(f)
             if 'last_sync' in data:
                 dt = datetime.fromisoformat(data['last_sync'])

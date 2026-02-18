@@ -426,5 +426,50 @@
             </div>
         </div>
     </a>
+    <a href="{% url 'condor_dor' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">Condor+DOR PNL</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">Condor & DOR Budget vs Actual P&L across CON, FEA, TRX, BRK departments.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ condor_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{{ condor_depts|default:"--" }}</span>
+                <span class="stat-label">Departments</span>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'creditor' %}" class="project-card">
+        <div class="project-header">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+            </div>
+            <div class="project-info">
+                <h3 class="project-title">Creditor Transaction Report</h3>
+                <span class="project-status">Active</span>
+            </div>
+        </div>
+        <p class="project-description">Creditor payables data by group and branch for Power BI reporting.</p>
+        <div class="project-stats">
+            <div class="stat">
+                <span class="stat-value">{{ creditor_rows|default:"--" }}</span>
+                <span class="stat-label">Records</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{{ creditor_groups|default:"--" }}</span>
+                <span class="stat-label">Groups</span>
+            </div>
+        </div>
+    </a>
 </div>
 {% endblock %}
