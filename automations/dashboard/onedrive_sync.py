@@ -3,6 +3,9 @@ import os
 import json
 import io
 import re
+import time
+import threading
+import logging
 from datetime import datetime
 from decimal import Decimal
 import msal
@@ -13,8 +16,17 @@ from psycopg2.extras import execute_values
 import openpyxl
 import xlrd
 
+logger = logging.getLogger(__name__)
+
 # Microsoft Graph API endpoint
 GRAPH_API_ENDPOINT = 'https://graph.microsoft.com/v1.0'
+
+# Thread lock to prevent concurrent token refresh races
+_token_lock = threading.Lock()
+
+# Cached token expiry timestamp (epoch seconds) to avoid unnecessary API calls
+_token_expiry = 0
+
 
 def get_msal_app():
     """Create MSAL application instance"""
@@ -24,45 +36,99 @@ def get_msal_app():
         client_credential=settings.ONEDRIVE_CLIENT_SECRET
     )
 
+
+def _do_token_refresh(token_data):
+    """Attempt to refresh the token using the refresh_token. Returns new access_token or None."""
+    global _token_expiry
+    refresh_token = token_data.get('refresh_token')
+    if not refresh_token:
+        logger.error("No refresh_token available - re-authentication required")
+        return None
+
+    app = get_msal_app()
+    result = app.acquire_token_by_refresh_token(
+        refresh_token,
+        scopes=settings.ONEDRIVE_SCOPES
+    )
+    if "access_token" in result:
+        save_token(result)
+        # Microsoft tokens typically expire in ~3600-5400s, refresh 5 min early
+        expires_in = result.get('expires_in', 3600)
+        _token_expiry = time.time() + expires_in - 300
+        logger.info("Token refreshed successfully")
+        return result['access_token']
+    else:
+        logger.error(f"Token refresh failed: {result.get('error_description', 'Unknown error')}")
+        return None
+
+
 def get_access_token():
-    """Get access token from saved file, refresh if expired"""
+    """Get access token from saved file, refresh if expired.
+
+    Uses local expiry tracking to avoid unnecessary API calls.
+    Retries refresh up to 3 times with backoff on failure.
+    Thread-safe - only one thread refreshes at a time.
+    Never returns a known-expired token.
+    """
+    global _token_expiry
+
     token_file = settings.ONEDRIVE_TOKEN_FILE
-    if os.path.exists(token_file):
+    if not os.path.exists(token_file):
+        logger.error("Token file does not exist - run initial OAuth flow")
+        return None
+
+    with _token_lock:
         with open(token_file, 'r') as f:
             token_data = json.load(f)
 
-        # Check if token is expired by trying to use it
         access_token = token_data.get('access_token')
-        if access_token:
-            # Quick validation check
+        if not access_token:
+            logger.error("No access_token in token file")
+            return None
+
+        # If we know the token hasn't expired yet, return it directly
+        if _token_expiry > 0 and time.time() < _token_expiry:
+            return access_token
+
+        # Token may be expired - validate with a quick API call
+        try:
             headers = {'Authorization': f'Bearer {access_token}'}
-            response = requests.get(f'{GRAPH_API_ENDPOINT}/me/drive', headers=headers)
+            response = requests.get(f'{GRAPH_API_ENDPOINT}/me/drive', headers=headers, timeout=10)
 
             if response.status_code == 200:
-                # Token is valid
+                # Token is valid - set expiry to 45 min from now as a safe estimate
+                _token_expiry = time.time() + 2700
                 return access_token
-            elif response.status_code == 401 and token_data.get('refresh_token'):
-                # Token expired, try to refresh
-                print("Access token expired, refreshing...")
-                app = get_msal_app()
-                result = app.acquire_token_by_refresh_token(
-                    token_data['refresh_token'],
-                    scopes=settings.ONEDRIVE_SCOPES
-                )
-                if "access_token" in result:
-                    save_token(result)
-                    print("Token refreshed successfully")
-                    return result['access_token']
-                else:
-                    print(f"Token refresh failed: {result.get('error_description', 'Unknown error')}")
+        except requests.RequestException as e:
+            logger.warning(f"Token validation request failed: {e}")
+            # Network issue - if we have a cached expiry that's recent, trust it
+            # Otherwise fall through to refresh
 
-            return access_token
-    return None
+        # Token is expired or validation failed - refresh with retries
+        logger.info("Access token expired or invalid, refreshing...")
+        for attempt in range(1, 4):
+            new_token = _do_token_refresh(token_data)
+            if new_token:
+                return new_token
+            if attempt < 3:
+                wait = attempt * 5  # 5s, 10s
+                logger.warning(f"Token refresh attempt {attempt}/3 failed, retrying in {wait}s...")
+                time.sleep(wait)
+                # Re-read token file in case another process updated it
+                with open(token_file, 'r') as f:
+                    token_data = json.load(f)
+
+        logger.error("All 3 token refresh attempts failed")
+        return None
+
 
 def save_token(token_data):
-    """Save token data to file"""
-    with open(settings.ONEDRIVE_TOKEN_FILE, 'w') as f:
+    """Save token data to file atomically"""
+    token_file = settings.ONEDRIVE_TOKEN_FILE
+    tmp_file = token_file + '.tmp'
+    with open(tmp_file, 'w') as f:
         json.dump(token_data, f)
+    os.replace(tmp_file, token_file)
 
 def get_auth_url():
     """Generate authorization URL for OAuth flow"""

@@ -335,16 +335,24 @@ def run_condor_dor_sync_job():
 
 
 def refresh_onedrive_token():
-    """Refresh the OneDrive access token to keep it alive"""
+    """Refresh the OneDrive access token to keep it alive.
+
+    The actual retry logic lives in get_access_token() which retries 3 times
+    with backoff. This function tracks the result in sync health so the
+    monitoring dashboard shows token status.
+    """
     from . import onedrive_sync
     try:
         token = onedrive_sync.get_access_token()
         if token:
             logger.info("OneDrive token refreshed successfully")
+            update_sync_health('onedrive_token', 'success', 'Token is active')
         else:
-            logger.warning("OneDrive token refresh returned None")
+            logger.error("OneDrive token refresh returned None - all retries exhausted")
+            update_sync_health('onedrive_token', 'error', 'Token refresh failed - re-authentication may be required')
     except Exception as e:
         logger.error(f"OneDrive token refresh error: {e}")
+        update_sync_health('onedrive_token', 'error', f'Token refresh exception: {e}')
 
 
 def start_scheduler():
@@ -518,17 +526,17 @@ def start_scheduler():
         replace_existing=True
     )
 
-    # Refresh OneDrive token every 10 minutes
+    # Refresh OneDrive token every 5 minutes to ensure it never expires
     scheduler.add_job(
         refresh_onedrive_token,
-        trigger=IntervalTrigger(minutes=10),
+        trigger=IntervalTrigger(minutes=5),
         id='token_refresh',
-        name='Refresh OneDrive token every 10 minutes',
+        name='Refresh OneDrive token every 5 minutes',
         replace_existing=True
     )
 
     scheduler.start()
-    logger.info("Scheduler started - All stations syncing every hour, token refresh every 10 minutes")
+    logger.info("Scheduler started - All stations syncing every hour, token refresh every 5 minutes")
 
     # Immediately refresh token on startup
     try:
