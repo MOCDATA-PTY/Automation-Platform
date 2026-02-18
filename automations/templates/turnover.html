@@ -286,7 +286,7 @@
         <div class="card-body">
             <div class="info-row">
                 <span class="info-label">Host</span>
-                <span class="info-value">167.88.43.168</span>
+                <span class="info-value">workspace.moc-pty.com</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Port</span>
@@ -325,7 +325,7 @@
         </button>
 
         <div class="conn-string">
-            Host=167.88.43.168;Port=5432;Database=turnover_data;Username=powerbi;Password=your_secure_password;SSLMode=disable
+            Host=workspace.moc-pty.com;Port=5432;Database=turnover_data;Username=powerbi;Password=your_secure_password;SSLMode=require
         </div>
     </div>
 </div>
@@ -338,7 +338,7 @@
     <div class="card-body">
         <div class="query-box">
             {% verbatim %}<code class="query-code" id="mcode">let
-    Source = PostgreSQL.Database("167.88.43.168:5432", "turnover_data"),
+    Source = PostgreSQL.Database("workspace.moc-pty.com", "turnover_data"),
     turnover_data = Value.NativeQuery(Source, "SELECT id, debtor, debtor_name, value, date, date_fixed, branch, report_date FROM turnover_data ORDER BY date DESC, branch, debtor"),
     #"Renamed Columns" = Table.RenameColumns(turnover_data,{{"id", "ID"}, {"debtor", "Debtor"}, {"debtor_name", "Debtor Name"}, {"value", "Value"}, {"date", "Date"}, {"date_fixed", "Date Fixed"}, {"branch", "Branch"}, {"report_date", "Report Date"}}),
     #"Changed Type" = Table.TransformColumnTypes(#"Renamed Columns",{{"ID", Int64.Type}, {"Debtor", type text}, {"Debtor Name", type text}, {"Value", type number}, {"Date", type date}, {"Date Fixed", type text}, {"Branch", type text}, {"Report Date", type date}}),
