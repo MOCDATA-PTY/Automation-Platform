@@ -276,8 +276,8 @@
     <div class="card-body">
         <div class="query-box">
             {% verbatim %}<code class="query-code" id="mcode">let
-    Source = PostgreSQL.Database("167.88.43.168:5432", "turnover_data", [SslMode="require", CreateNavigationProperties=false]),
-    creditor_transactions = Value.NativeQuery(Source, "SELECT * FROM creditor_transactions", null, [EnableFolding=true]),
+    Source = PostgreSQL.Database("167.88.43.168", "turnover_data"),
+    creditor_transactions = Source{[Schema="public",Item="creditor_transactions"]}[Data],
     #"Renamed Columns" = Table.RenameColumns(creditor_transactions,{{"creditor", "Creditor"}, {"creditor_name", "Creditor Name"}, {"period", "Attribute"}, {"value", "Value"}, {"creditor_group", "Creditor Groups Code"}, {"branch", "Branch"}}),
     #"Changed Type" = Table.TransformColumnTypes(#"Renamed Columns",{{"Creditor", type text}, {"Creditor Name", type text}, {"Attribute", Int64.Type}, {"Value", type number}}),
     #"Added Conditional Column" = Table.AddColumn(#"Changed Type", "Creditor Group", each if [Creditor Groups Code] = "EMP" then "Employee" else if [Creditor Groups Code] = "TPY" then "Third Party Company" else if [Creditor Groups Code] = "TRU" then "Truckers" else if [Creditor Groups Code] = "ATT" then "Attorneys" else if [Creditor Groups Code] = "ASC" then "Associated Company" else if [Creditor Groups Code] = "AIR" then "Airlines" else if [Creditor Groups Code] = "SSL" then "Steamship Lines" else if [Creditor Groups Code] = "AUS" then "Australia Direct Client" else if [Creditor Groups Code] = "X2" then "X2 Agent" else if [Creditor Groups Code] = "OH" then "Overheads" else if [Creditor Groups Code] = "AGT" then "Overseas Agents" else if [Creditor Groups Code] = "INT" then "Intercompany" else if [Creditor Groups Code] = "CRE" then "Credit Cards" else if [Creditor Groups Code] = "HR" then "Human Resources" else "Unknown")
