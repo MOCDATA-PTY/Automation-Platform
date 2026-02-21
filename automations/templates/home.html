@@ -1,50 +1,140 @@
 {% extends 'base.html' %}
+{% load humanize %}
 
 {% block title %}Home - MOC Automations{% endblock %}
 
 {% block extra_styles %}
+.home-header {
+    margin-bottom: 28px;
+}
+
+.home-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: #1b1a19;
+    margin-bottom: 4px;
+}
+
+.home-subtitle {
+    font-size: 14px;
+    color: #a19f9d;
+}
+
+/* Summary bar */
+.summary-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+}
+
+.summary-pill {
+    background: #fff;
+    border: 1px solid #edebe9;
+    border-radius: 20px;
+    padding: 8px 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #323130;
+}
+
+.summary-pill svg {
+    width: 15px;
+    height: 15px;
+    fill: #054B70;
+    flex-shrink: 0;
+}
+
+.summary-pill strong {
+    font-weight: 700;
+    color: #054B70;
+}
+
+/* Section label */
+.section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #a19f9d;
+    margin-bottom: 12px;
+    margin-top: 4px;
+}
+
+/* Grid */
 .projects-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
 }
 
 .project-card {
     background: #fff;
     border: 1px solid #edebe9;
-    border-radius: 4px;
-    padding: 20px;
+    border-radius: 6px;
+    padding: 18px 20px;
     text-decoration: none;
     display: block;
-    transition: box-shadow 0.1s ease, border-color 0.1s ease;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.project-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    background: #054B70;
+    opacity: 0;
+    transition: opacity 0.15s ease;
 }
 
 .project-card:hover {
-    border-color: #054B70;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border-color: #c7e0f4;
+    box-shadow: 0 4px 16px rgba(5,75,112,0.1);
+    transform: translateY(-1px);
+}
+
+.project-card:hover::before {
+    opacity: 1;
 }
 
 .project-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 
 .project-icon {
-    width: 40px;
-    height: 40px;
-    background: #054B70;
-    border-radius: 4px;
+    width: 36px;
+    height: 36px;
+    background: #edf4f8;
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    transition: background 0.15s ease;
+}
+
+.project-card:hover .project-icon {
+    background: #054B70;
 }
 
 .project-icon svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
+    fill: #054B70;
+    transition: fill 0.15s ease;
+}
+
+.project-card:hover .project-icon svg {
     fill: #fff;
 }
 
@@ -54,33 +144,45 @@
 }
 
 .project-title {
-    color: #323130;
-    font-size: 14px;
+    color: #1b1a19;
+    font-size: 13px;
     font-weight: 600;
     margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .project-status {
-    font-size: 12px;
+    font-size: 11px;
     color: #107c10;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
-.project-status.coming-soon {
-    color: #605e5c;
+.project-status::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #107c10;
+    display: inline-block;
 }
 
 .project-description {
-    color: #605e5c;
-    font-size: 13px;
+    color: #797775;
+    font-size: 12px;
     line-height: 1.5;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
 }
 
 .project-stats {
     display: flex;
-    gap: 24px;
+    gap: 20px;
     padding-top: 12px;
-    border-top: 1px solid #edebe9;
+    border-top: 1px solid #f3f2f1;
 }
 
 .stat {
@@ -90,386 +192,283 @@
 
 .stat-value {
     color: #054B70;
-    font-size: 20px;
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
 }
 
 .stat-label {
-    color: #a19f9d;
-    font-size: 11px;
+    color: #c8c6c4;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    margin-top: 2px;
 }
 
-.project-card.disabled {
-    opacity: 0.6;
-    cursor: default;
+.arrow-icon {
+    position: absolute;
+    top: 18px;
+    right: 16px;
+    width: 16px;
+    height: 16px;
+    fill: #c8c6c4;
+    transition: fill 0.15s ease, transform 0.15s ease;
 }
 
-.project-card.disabled:hover {
-    border-color: #edebe9;
-    box-shadow: none;
+.project-card:hover .arrow-icon {
+    fill: #054B70;
+    transform: translateX(2px);
 }
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1 class="page-title">Automations</h1>
-    <p class="page-subtitle">Select a project to view details</p>
+<div class="home-header">
+    <h1 class="home-title">MOC Automations</h1>
+    <p class="home-subtitle">Select a station to view connection details and sync status</p>
 </div>
 
+<div class="summary-bar">
+    <div class="summary-pill">
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+        <span><strong>18</strong> Active stations</span>
+    </div>
+    <div class="summary-pill">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+        <span>Syncing every <strong>1 hour</strong></span>
+    </div>
+    <div class="summary-pill">
+        <svg viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
+        <span>Token refresh every <strong>5 min</strong></span>
+    </div>
+</div>
+
+<div class="section-label">All Stations</div>
+
 <div class="projects-grid">
+
     <a href="{% url 'turnover' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
             <div class="project-icon">
                 <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
             </div>
             <div class="project-info">
-                <h3 class="project-title">Turnover Automation</h3>
+                <h3 class="project-title">Turnover</h3>
                 <span class="project-status">Active</span>
             </div>
         </div>
-        <p class="project-description">Sync turnover data from Google Drive to PostgreSQL. Connects to Power BI for reporting.</p>
+        <p class="project-description">Turnover data synced from OneDrive to PostgreSQL for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ total_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
-            <div class="stat">
-                <span class="stat-value">{{ branch_count|default:"--" }}</span>
-                <span class="stat-label">Branches</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ total_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
+            <div class="stat"><span class="stat-value">{{ branch_count|default:"--" }}</span><span class="stat-label">Branches</span></div>
         </div>
     </a>
 
     <a href="{% url 'atl' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">ATL Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">ATL Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">ATL Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">ATL Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ atl_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ atl_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'ccc' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">CCC Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">CCC Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">CCC Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">CCC Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ ccc_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ ccc_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'ccd' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">CCD Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">CCD Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">CCD Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">CCD Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ ccd_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ ccd_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'con' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">CON Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">CON Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">CON Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">CON Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ con_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ con_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'dor' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">DOR Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">DOR Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">DOR Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">DOR Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ dor_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ dor_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'fax' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">FAX Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">FAX Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">FAX Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">FAX Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ fax_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ fax_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'hnl' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">HNL Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">HNL Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">HNL Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">HNL Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ hnl_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ hnl_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'hou' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">HOU Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">HOU Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">HOU Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">HOU Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ hou_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ hou_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'ics' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">ICS Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">ICS Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">ICS Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">ICS Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ ics_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ ics_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'imp' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">IMP Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">IMP Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">IMP Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">IMP Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ imp_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ imp_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'jfk' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">JFK Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">JFK Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">JFK Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">JFK Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ jfk_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ jfk_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'lax' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">LAX Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">LAX Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">LAX Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">LAX Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ lax_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ lax_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'lcl' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">LCL Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">LCL Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">LCL Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">LCL Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ lcl_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ lcl_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'ord' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">ORD Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">ORD Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">ORD Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">ORD Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ ord_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ ord_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
 
     <a href="{% url 'ppg' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">PPG Financial Analysis</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">PPG Financial Analysis</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">PPG Budget vs Actual P&L data for Power BI reporting.</p>
+        <p class="project-description">PPG Budget vs Actual P&L for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ ppg_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ ppg_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
         </div>
     </a>
+
     <a href="{% url 'condor_dor' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">Condor+DOR PNL</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">Condor+DOR PNL</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">Condor & DOR Budget vs Actual P&L across CON, FEA, TRX, BRK departments.</p>
+        <p class="project-description">Condor & DOR P&L across CON, FEA, TRX, BRK departments.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ condor_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
-            <div class="stat">
-                <span class="stat-value">{{ condor_depts|default:"--" }}</span>
-                <span class="stat-label">Departments</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ condor_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
+            <div class="stat"><span class="stat-value">{{ condor_depts|default:"--" }}</span><span class="stat-label">Departments</span></div>
         </div>
     </a>
 
     <a href="{% url 'creditor' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">
-            <div class="project-icon">
-                <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-            </div>
-            <div class="project-info">
-                <h3 class="project-title">Creditor Transaction Report</h3>
-                <span class="project-status">Active</span>
-            </div>
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">Creditor Report</h3><span class="project-status">Active</span></div>
         </div>
-        <p class="project-description">Creditor payables data by group and branch for Power BI reporting.</p>
+        <p class="project-description">Creditor payables by group and branch for Power BI.</p>
         <div class="project-stats">
-            <div class="stat">
-                <span class="stat-value">{{ creditor_rows|default:"--" }}</span>
-                <span class="stat-label">Records</span>
-            </div>
-            <div class="stat">
-                <span class="stat-value">{{ creditor_groups|default:"--" }}</span>
-                <span class="stat-label">Groups</span>
-            </div>
+            <div class="stat"><span class="stat-value">{{ creditor_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
+            <div class="stat"><span class="stat-value">{{ creditor_groups|default:"--" }}</span><span class="stat-label">Groups</span></div>
         </div>
     </a>
+
 </div>
 {% endblock %}
