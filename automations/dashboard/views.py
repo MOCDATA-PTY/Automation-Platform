@@ -1530,6 +1530,18 @@ def _get_station_statuses():
         health_status = health.get('status', 'unknown')
         health_message = health.get('message', '')
 
+        # Fallback: if no last_sync file, use sync_health last_check so the
+        # monitor shows when the job last ran (e.g. "No file" syncs like CCC)
+        if last_sync_dt is None and health.get('last_check'):
+            try:
+                last_sync_dt = datetime.fromisoformat(health['last_check'])
+                last_sync_display = {
+                    'time': last_sync_dt.strftime('%H:%M'),
+                    'date': last_sync_dt.strftime('%b %d, %Y'),
+                }
+            except Exception:
+                pass
+
         # Query actual record count from DB
         records = None
         table = STATION_TABLES.get(station)
