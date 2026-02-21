@@ -4,71 +4,118 @@
 {% block title %}Sync Monitor - MOC Automations{% endblock %}
 
 {% block extra_styles %}
-.summary-row {
-    display: flex;
-    gap: 16px;
+/* Banner header — mirrors login left panel */
+.monitor-banner {
+    background: #054B70;
+    border-radius: 8px;
+    padding: 32px 36px 28px;
     margin-bottom: 24px;
-    flex-wrap: wrap;
+    position: relative;
+    overflow: hidden;
 }
 
-.summary-card {
-    background: #fff;
-    border: 1px solid #edebe9;
-    border-radius: 4px;
-    padding: 16px 24px;
-    min-width: 160px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-.summary-icon {
-    width: 40px;
-    height: 40px;
+.monitor-banner::before {
+    content: '';
+    position: absolute;
+    top: -80px;
+    right: -60px;
+    width: 260px;
+    height: 260px;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
+    background: rgba(148, 188, 204, 0.12);
+    pointer-events: none;
 }
 
-.summary-icon svg {
-    width: 20px;
-    height: 20px;
-    fill: #fff;
+.monitor-banner::after {
+    content: '';
+    position: absolute;
+    bottom: -60px;
+    left: 240px;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: rgba(148, 188, 204, 0.08);
+    pointer-events: none;
 }
 
-.summary-icon.healthy { background: #107c10; }
-.summary-icon.stale { background: #ca5010; }
-.summary-icon.error { background: #d13438; }
-.summary-icon.total { background: #054B70; }
-
-.summary-number {
-    font-size: 28px;
+.banner-eyebrow {
+    font-size: 10px;
     font-weight: 600;
-    color: #323130;
-}
-
-.summary-label {
-    font-size: 12px;
-    color: #605e5c;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 1.8px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    position: relative;
+    z-index: 1;
 }
 
+.banner-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 4px;
+    position: relative;
+    z-index: 1;
+}
+
+.banner-subtitle {
+    font-size: 13px;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 28px;
+    position: relative;
+    z-index: 1;
+}
+
+.banner-stats {
+    display: flex;
+    gap: 36px;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 1;
+}
+
+.banner-stat {
+    border-top: 2px solid rgba(148, 188, 204, 0.35);
+    padding-top: 10px;
+    min-width: 64px;
+}
+
+.banner-stat-num {
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+}
+
+.banner-stat-num.healthy { color: #6fcf7c; }
+.banner-stat-num.stale   { color: #f4b560; }
+.banner-stat-num.error   { color: #f27b7e; }
+
+.banner-stat-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.45);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-top: 3px;
+}
+
+/* Card */
 .card {
     background: #fff;
     border: 1px solid #edebe9;
-    border-radius: 4px;
+    border-radius: 6px;
     margin-bottom: 16px;
+    overflow: hidden;
 }
 
 .card-header {
-    padding: 16px 20px;
+    padding: 14px 20px;
     border-bottom: 1px solid #edebe9;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    background: #faf9f8;
 }
 
 .card-header-left {
@@ -78,31 +125,32 @@
 }
 
 .card-header svg {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     fill: #054B70;
 }
 
 .card-title {
     color: #323130;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
 }
 
 .auto-refresh {
-    font-size: 12px;
-    color: #605e5c;
+    font-size: 11px;
+    color: #a19f9d;
     display: flex;
     align-items: center;
     gap: 4px;
 }
 
 .auto-refresh svg {
-    width: 14px;
-    height: 14px;
-    fill: #605e5c;
+    width: 12px;
+    height: 12px;
+    fill: #a19f9d;
 }
 
+/* Table */
 .monitor-table {
     width: 100%;
     border-collapse: collapse;
@@ -111,78 +159,95 @@
 .monitor-table th {
     text-align: left;
     padding: 10px 20px;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
-    color: #605e5c;
+    color: #a19f9d;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.7px;
     border-bottom: 1px solid #edebe9;
     background: #faf9f8;
 }
 
 .monitor-table td {
-    padding: 12px 20px;
+    padding: 13px 20px;
     font-size: 13px;
     color: #323130;
     border-bottom: 1px solid #f3f2f1;
+    vertical-align: middle;
 }
 
-.monitor-table tr:last-child td {
+.monitor-table tbody tr:last-child td {
     border-bottom: none;
 }
 
-.monitor-table tr:hover td {
-    background: #faf9f8;
+.monitor-table tbody tr {
+    transition: background 0.1s ease;
+    border-left: 3px solid transparent;
 }
 
-.status-dot {
-    width: 8px;
-    height: 8px;
+.monitor-table tbody tr:hover {
+    background: #f8f8f8;
+    border-left-color: #94BCCC;
+}
+
+/* Status badges */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.status-badge .dot {
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
-    display: inline-block;
-    margin-right: 8px;
+    flex-shrink: 0;
 }
 
-.status-dot.healthy { background: #107c10; }
-.status-dot.stale { background: #ca5010; }
-.status-dot.error { background: #d13438; }
-.status-dot.unknown { background: #a19f9d; }
+.status-badge.healthy { background: #e6f4e6; color: #107c10; }
+.status-badge.healthy .dot { background: #107c10; }
 
-.status-label {
-    font-weight: 500;
-}
+.status-badge.stale { background: #fdf1e6; color: #ca5010; }
+.status-badge.stale .dot { background: #ca5010; }
 
-.status-label.healthy { color: #107c10; }
-.status-label.stale { color: #ca5010; }
-.status-label.error { color: #d13438; }
-.status-label.unknown { color: #a19f9d; }
+.status-badge.error { background: #fde7e9; color: #d13438; }
+.status-badge.error .dot { background: #d13438; }
+
+.status-badge.unknown { background: #f3f2f1; color: #a19f9d; }
+.status-badge.unknown .dot { background: #c8c6c4; }
 
 .station-link {
     color: #054B70;
     text-decoration: none;
     font-weight: 600;
+    letter-spacing: 0.3px;
 }
 
-.station-link:hover {
-    text-decoration: underline;
+.station-link:hover { text-decoration: underline; }
+
+.sync-time {
+    font-size: 13px;
+    color: #323130;
 }
 
-.error-msg {
-    font-size: 12px;
-    color: #605e5c;
-    max-width: 300px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.sync-time .time-part {
+    font-weight: 500;
 }
 
-.error-msg.has-error {
-    color: #d13438;
+.sync-time .date-part {
+    color: #a19f9d;
+    font-size: 11px;
+    margin-left: 4px;
 }
 
 .time-ago {
     font-size: 12px;
-    color: #605e5c;
+    color: #a19f9d;
 }
 
 .time-ago.stale {
@@ -190,12 +255,31 @@
     font-weight: 500;
 }
 
+.records-count {
+    font-size: 13px;
+    font-weight: 500;
+    color: #323130;
+    font-variant-numeric: tabular-nums;
+}
+
+.msg-text {
+    font-size: 12px;
+    color: #a19f9d;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.msg-text.has-error { color: #d13438; }
+
+/* Sync All button */
 .btn-sync {
-    background: #054B70;
+    background: rgba(255,255,255,0.15);
     color: #fff;
-    border: none;
-    padding: 7px 14px;
-    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 6px 14px;
+    border-radius: 20px;
     font-size: 12px;
     font-weight: 600;
     font-family: inherit;
@@ -205,14 +289,15 @@
     gap: 6px;
     transition: background 0.15s ease;
     letter-spacing: 0.3px;
+    backdrop-filter: blur(4px);
 }
 
-.btn-sync:hover { background: #043a58; }
-.btn-sync:disabled { background: #a19f9d; cursor: not-allowed; }
+.btn-sync:hover { background: rgba(255,255,255,0.25); }
+.btn-sync:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-sync svg {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
     fill: currentColor;
 }
 
@@ -221,50 +306,38 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1 class="page-title">Sync Monitor</h1>
-    <p class="page-subtitle">Real-time health status for all station OneDrive syncs</p>
-</div>
-
-<!-- Summary cards -->
-<div class="summary-row">
-    <div class="summary-card">
-        <div class="summary-icon total">
-            <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
-        </div>
+<!-- Banner replaces plain page-header + summary cards -->
+<div class="monitor-banner">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;">
         <div>
-            <div class="summary-number">{{ total_stations }}</div>
-            <div class="summary-label">Total Stations</div>
+            <div class="banner-eyebrow">MOC Automations</div>
+            <div class="banner-title">Sync Monitor</div>
+            <div class="banner-subtitle">Real-time health status for all station OneDrive syncs</div>
+        </div>
+        <button class="btn-sync" id="syncAllBtn" onclick="syncAll()" style="margin-top:4px;">
+            <svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+            Sync All
+        </button>
+    </div>
+    <div class="banner-stats">
+        <div class="banner-stat">
+            <div class="banner-stat-num">{{ total_stations }}</div>
+            <div class="banner-stat-label">Stations</div>
+        </div>
+        <div class="banner-stat">
+            <div class="banner-stat-num healthy" id="healthy-count">{{ healthy_count }}</div>
+            <div class="banner-stat-label">Healthy</div>
+        </div>
+        <div class="banner-stat">
+            <div class="banner-stat-num stale" id="stale-count">{{ stale_count }}</div>
+            <div class="banner-stat-label">Stale</div>
+        </div>
+        <div class="banner-stat">
+            <div class="banner-stat-num error" id="error-count">{{ error_count }}</div>
+            <div class="banner-stat-label">Errors</div>
         </div>
     </div>
-    <div class="summary-card">
-        <div class="summary-icon healthy">
-            <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-        </div>
-        <div>
-            <div class="summary-number" id="healthy-count">{{ healthy_count }}</div>
-            <div class="summary-label">Healthy</div>
-        </div>
-    </div>
-    <div class="summary-card">
-        <div class="summary-icon stale">
-            <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
-        </div>
-        <div>
-            <div class="summary-number" id="stale-count">{{ stale_count }}</div>
-            <div class="summary-label">Stale</div>
-        </div>
-    </div>
-    <div class="summary-card">
-        <div class="summary-icon error">
-            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-        </div>
-        <div>
-            <div class="summary-number" id="error-count">{{ error_count }}</div>
-            <div class="summary-label">Errors</div>
-        </div>
-    </div>
-</div>
+</div> <!-- /monitor-banner -->
 
 <!-- Station table -->
 <div class="card">
@@ -278,10 +351,6 @@
                 <svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
                 Auto-refreshes every 30s
             </span>
-            <button class="btn-sync" id="syncAllBtn" onclick="syncAll()">
-                <svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
-                Sync All
-            </button>
         </div>
     </div>
     <table class="monitor-table" id="station-table">
@@ -302,8 +371,8 @@
                     <a href="/{{ station.code_lower }}/" class="station-link">{{ station.code }}</a>
                 </td>
                 <td>
-                    <span class="status-dot {{ station.status }}"></span>
-                    <span class="status-label {{ station.status }}">
+                    <span class="status-badge {{ station.status }}">
+                        <span class="dot"></span>
                         {% if station.status == 'healthy' %}Healthy
                         {% elif station.status == 'stale' %}Stale
                         {% elif station.status == 'error' %}Error
@@ -312,9 +381,12 @@
                 </td>
                 <td>
                     {% if station.last_sync %}
-                        {{ station.last_sync.time }} &middot; {{ station.last_sync.date }}
+                        <span class="sync-time">
+                            <span class="time-part">{{ station.last_sync.time }}</span>
+                            <span class="date-part">{{ station.last_sync.date }}</span>
+                        </span>
                     {% else %}
-                        <span style="color: #a19f9d;">Never</span>
+                        <span style="color:#c8c6c4;font-size:12px;">Never</span>
                     {% endif %}
                 </td>
                 <td>
@@ -323,14 +395,12 @@
                     </span>
                 </td>
                 <td>
-                    {% if station.records is not None %}
-                        {{ station.records|intcomma }}
-                    {% else %}
-                        --
-                    {% endif %}
+                    <span class="records-count">
+                        {% if station.records is not None %}{{ station.records|intcomma }}{% else %}--{% endif %}
+                    </span>
                 </td>
                 <td>
-                    <span class="error-msg {% if station.status == 'error' %}has-error{% endif %}"
+                    <span class="msg-text {% if station.status == 'error' %}has-error{% endif %}"
                           title="{{ station.message }}">
                         {{ station.message|default:"--" }}
                     </span>
@@ -386,7 +456,7 @@ function syncAll() {
 
 setInterval(function() {
     fetch('/monitor/api/')
-        .then(function(response) { return response.json(); })
+        .then(function(r) { return r.json(); })
         .then(function(data) {
             document.getElementById('healthy-count').textContent = data.healthy_count;
             document.getElementById('stale-count').textContent = data.stale_count;
@@ -396,22 +466,22 @@ setInterval(function() {
             var html = '';
             data.stations.forEach(function(s) {
                 var statusLabel = s.status === 'healthy' ? 'Healthy' :
-                                  s.status === 'stale' ? 'Stale' :
-                                  s.status === 'error' ? 'Error' : 'Unknown';
+                                  s.status === 'stale'   ? 'Stale'   :
+                                  s.status === 'error'   ? 'Error'   : 'Unknown';
                 var syncDisplay = s.last_sync
-                    ? s.last_sync.time + ' &middot; ' + s.last_sync.date
-                    : '<span style="color: #a19f9d;">Never</span>';
+                    ? '<span class="sync-time"><span class="time-part">' + s.last_sync.time + '</span><span class="date-part">' + s.last_sync.date + '</span></span>'
+                    : '<span style="color:#c8c6c4;font-size:12px;">Never</span>';
                 var timeAgoClass = s.status === 'stale' ? 'stale' : '';
-                var errorClass = s.status === 'error' ? 'has-error' : '';
+                var errClass = s.status === 'error' ? 'has-error' : '';
+                var rec = (s.records !== null && s.records !== undefined) ? Number(s.records).toLocaleString() : '--';
 
                 html += '<tr>';
                 html += '<td><a href="/' + s.code_lower + '/" class="station-link">' + s.code + '</a></td>';
-                html += '<td><span class="status-dot ' + s.status + '"></span>';
-                html += '<span class="status-label ' + s.status + '">' + statusLabel + '</span></td>';
+                html += '<td><span class="status-badge ' + s.status + '"><span class="dot"></span>' + statusLabel + '</span></td>';
                 html += '<td>' + syncDisplay + '</td>';
                 html += '<td><span class="time-ago ' + timeAgoClass + '">' + (s.time_ago || '--') + '</span></td>';
-                html += '<td>' + (s.records !== null && s.records !== undefined ? Number(s.records).toLocaleString() : '--') + '</td>';
-                html += '<td><span class="error-msg ' + errorClass + '" title="' + (s.message || '') + '">' + (s.message || '--') + '</span></td>';
+                html += '<td><span class="records-count">' + rec + '</span></td>';
+                html += '<td><span class="msg-text ' + errClass + '" title="' + (s.message || '') + '">' + (s.message || '--') + '</span></td>';
                 html += '</tr>';
             });
             tbody.innerHTML = html;
