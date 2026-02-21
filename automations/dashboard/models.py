@@ -20,6 +20,7 @@ class ProjectTask(models.Model):
     description = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='backlog')
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    project_name = models.CharField(max_length=100, blank=True, default='')
     parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='subtasks')
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)

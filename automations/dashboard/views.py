@@ -1718,7 +1718,7 @@ def project_planner(request):
 
 @login_required
 def planner_api(request):
-    """JSON API returning top-level tasks with nested subtasks for the Gantt chart."""
+    """JSON API returning 3-level hierarchy: projects → tasks → subtasks for the Gantt chart."""
     def serialize(t):
         return {
             'id': t.id,
@@ -1730,17 +1730,51 @@ def planner_api(request):
             'end_date': t.end_date.isoformat() if t.end_date else None,
         }
 
-    top_level = ProjectTask.objects.filter(parent=None).prefetch_related('subtasks')
-    tasks = []
+    from collections import defaultdict, OrderedDict
+
+    top_level = ProjectTask.objects.filter(parent=None).prefetch_related('subtasks').order_by('start_date', 'created_at')
+
+    # Group by project_name, preserving insertion order
+    proj_map = OrderedDict()
     for t in top_level:
-        td = serialize(t)
-        td['subtasks'] = [serialize(s) for s in t.subtasks.all()]
-        tasks.append(td)
+        key = t.project_name.strip() or 'Uncategorized'
+        if key not in proj_map:
+            proj_map[key] = []
+        proj_map[key].append(t)
+
+    projects = []
+    for proj_name, task_qs in proj_map.items():
+        task_starts = [t.start_date for t in task_qs if t.start_date]
+        task_ends   = [t.end_date   for t in task_qs if t.end_date]
+        proj_start  = min(task_starts).isoformat() if task_starts else None
+        proj_end    = max(task_ends).isoformat()   if task_ends   else None
+
+        statuses = [t.status for t in task_qs]
+        if all(s == 'done' for s in statuses):
+            proj_status = 'done'
+        elif any(s in ('in_progress', 'review') for s in statuses):
+            proj_status = 'in_progress'
+        else:
+            proj_status = 'todo'
+
+        task_list = []
+        for t in task_qs:
+            td = serialize(t)
+            td['subtasks'] = [serialize(s) for s in t.subtasks.all()]
+            task_list.append(td)
+
+        projects.append({
+            'name': proj_name,
+            'status': proj_status,
+            'start_date': proj_start,
+            'end_date': proj_end,
+            'tasks': task_list,
+        })
 
     total = ProjectTask.objects.count()
     in_progress = ProjectTask.objects.filter(status='in_progress').count()
     done = ProjectTask.objects.filter(status='done').count()
-    return JsonResponse({'tasks': tasks, 'total': total, 'in_progress': in_progress, 'done': done})
+    return JsonResponse({'projects': projects, 'total': total, 'in_progress': in_progress, 'done': done})
 
 
 @login_required

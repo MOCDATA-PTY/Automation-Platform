@@ -339,6 +339,32 @@
 .gantt-empty { padding:48px 24px; text-align:center; color:#a19f9d; font-size:14px; }
 .gantt-empty-icon { font-size:36px; margin-bottom:12px; }
 
+/* ── 3-Level row styles ── */
+/* Level-0: Project summary row */
+.gantt-task-row.level-0 { background:#e8e6e4; height:44px; }
+.gantt-task-row.level-0:hover { background:#dededc; }
+.gantt-tl-row.level-0-row { background:#e8e6e4; height:44px; }
+.gantt-tl-row.level-0-row:hover { background:#dededc; }
+.gantt-task-label.level-0-label { font-weight:700; font-size:13px; color:#054B70; letter-spacing:0.2px; }
+
+/* Level-1: Task row */
+.gantt-task-row.level-1 { background:#f8f7f6; }
+.gantt-task-row.level-1:hover { background:#f0efee; }
+.gantt-tl-row.level-1-row { background:#f8f7f6; }
+.gantt-tl-row.level-1-row:hover { background:#f0efee; }
+.gantt-task-label.level-1-label { padding-left:6px; font-weight:500; }
+
+/* Level-2: Subtask row */
+.gantt-task-row.level-2 {}
+.gantt-task-row.level-2:hover { background:#faf9f8; }
+.gantt-tl-row.level-2-row {}
+.gantt-tl-row.level-2-row:hover { background:#faf9f8; }
+.gantt-task-label.level-2-label { font-size:11px; color:#605e5c; padding-left:24px; }
+
+/* Summary/task/subtask bar variants */
+.gantt-bar.summary-bar { height:14px; border-radius:3px; opacity:0.85; }
+.gantt-bar.task-bar    { height:28px; }
+
 /* ──────── MODAL ──────── */
 .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:1000; align-items:center; justify-content:center; }
 .modal-overlay.open { display:flex; }
@@ -719,12 +745,12 @@ document.addEventListener('keydown', function(e) {
 });
 
 /* ────────────────────────────────────────────
-   GANTT CHART
+   GANTT CHART  (3-level: project → task → subtask)
 ──────────────────────────────────────────── */
-var MONTH_PX     = 140;  // fixed px per month column
-var ganttState   = {};   // {rangeStart, pxPerDay}
-var ganttCache   = [];   // last API response tasks
-var collapsedMap = {};   // {taskId: bool}
+var MONTH_PX     = 140;
+var ganttState   = {};
+var ganttCache   = [];   // array of project objects
+var collapsedMap = {};   // { 'proj_N': bool, 'task_ID': bool }
 
 function ganttStatusCls(status) {
     if (status === 'done')                               return 'completed';
@@ -732,43 +758,45 @@ function ganttStatusCls(status) {
     return 'not-started';
 }
 function monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
-function fmtMonth(d)   {
+function fmtMonth(d) {
     return d.toLocaleString('default', { month: 'short' }) + " '" + String(d.getFullYear()).slice(2);
 }
+function stripPrefix(title) { return String(title).replace(/^\[[^\]]+\]\s*/, ''); }
 
 function renderGantt() {
     fetch('/planner/api/')
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            ganttCache = data.tasks;
-            buildGantt(data.tasks);
+            ganttCache = data.projects || [];
+            buildGantt(ganttCache);
         });
 }
 
-function buildGantt(tasks) {
+function buildGantt(projects) {
     var today = new Date(); today.setHours(0,0,0,0);
 
-    // Collect all dates for range calculation
+    // Collect all dates for range
     var allDates = [today];
-    tasks.forEach(function(t) {
-        if (t.start_date) allDates.push(new Date(t.start_date));
-        if (t.end_date)   allDates.push(new Date(t.end_date));
-        (t.subtasks || []).forEach(function(s) {
-            if (s.start_date) allDates.push(new Date(s.start_date));
-            if (s.end_date)   allDates.push(new Date(s.end_date));
+    projects.forEach(function(p) {
+        if (p.start_date) allDates.push(new Date(p.start_date + 'T00:00:00'));
+        if (p.end_date)   allDates.push(new Date(p.end_date   + 'T00:00:00'));
+        (p.tasks || []).forEach(function(t) {
+            if (t.start_date) allDates.push(new Date(t.start_date + 'T00:00:00'));
+            if (t.end_date)   allDates.push(new Date(t.end_date   + 'T00:00:00'));
+            (t.subtasks || []).forEach(function(s) {
+                if (s.start_date) allDates.push(new Date(s.start_date + 'T00:00:00'));
+                if (s.end_date)   allDates.push(new Date(s.end_date   + 'T00:00:00'));
+            });
         });
     });
 
     var rangeStart = monthStart(new Date(Math.min.apply(null, allDates)));
     var rangeEnd   = new Date(Math.max.apply(null, allDates));
-    rangeEnd = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth() + 1, 0); // month end
-
-    // 1-month padding on each side
+    rangeEnd = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth() + 1, 0);
     rangeStart.setMonth(rangeStart.getMonth() - 1);
     rangeEnd.setMonth(rangeEnd.getMonth() + 1);
     rangeEnd = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth() + 1, 0);
 
-    // Build months array
     var months = [];
     var cur = new Date(rangeStart);
     while (cur <= rangeEnd) { months.push(new Date(cur)); cur.setMonth(cur.getMonth() + 1); }
@@ -780,20 +808,24 @@ function buildGantt(tasks) {
     ganttState = { rangeStart: rangeStart, pxPerDay: pxPerDay };
 
     function toPx(dateStr) {
-        var d = new Date(dateStr); d.setHours(0,0,0,0);
+        var d = new Date(dateStr + 'T00:00:00');
         if (d < rangeStart) d = new Date(rangeStart);
         if (d > rangeEnd)   d = new Date(rangeEnd);
         return ((d - rangeStart) / 86400000) * pxPerDay;
     }
     function barW(s, e) {
-        var sd = new Date(s); sd.setHours(0,0,0,0);
-        var ed = new Date(e); ed.setHours(0,0,0,0);
+        var sd = new Date(s + 'T00:00:00'), ed = new Date(e + 'T00:00:00');
         if (sd < rangeStart) sd = new Date(rangeStart);
         if (ed > rangeEnd)   ed = new Date(rangeEnd);
         return Math.max(((ed - sd) / 86400000 + 1) * pxPerDay, 6);
     }
+    function gridCells() {
+        var h = '';
+        months.forEach(function() { h += '<div class="gantt-grid-cell" style="width:' + MONTH_PX + 'px;"></div>'; });
+        return h;
+    }
 
-    // Render month header
+    // Month header
     var hHtml = '';
     months.forEach(function(m) {
         hHtml += '<div class="gantt-month-cell" style="width:' + MONTH_PX + 'px;">' + fmtMonth(m) + '</div>';
@@ -802,83 +834,112 @@ function buildGantt(tasks) {
     hi.innerHTML = hHtml;
     hi.style.width = totalWidth + 'px';
 
-    // Build task panel + timeline body in lockstep
     var taskHtml = '';
     var tlWrap   = '<div style="position:relative;min-width:' + totalWidth + 'px;">';
 
-    // Today vertical line
+    // Today line
     var todayPx = ((today - rangeStart) / 86400000) * pxPerDay;
     if (today >= rangeStart && today <= rangeEnd) {
         tlWrap += '<div class="gantt-today-line" style="left:' + todayPx.toFixed(1) + 'px;"></div>';
     }
 
-    if (tasks.length === 0) {
-        taskHtml = '<div class="gantt-empty"><div class="gantt-empty-icon">📅</div>No tasks yet. Add tasks and set dates to see them here.</div>';
+    if (!projects || projects.length === 0) {
+        taskHtml = '<div class="gantt-empty"><div class="gantt-empty-icon">📅</div>No projects yet. Add tasks with dates to see them here.</div>';
     } else {
-        tasks.forEach(function(task) {
-            var isParent  = task.subtasks && task.subtasks.length > 0;
-            var collapsed = !!collapsedMap[task.id];
-            var sCls      = ganttStatusCls(task.status);
+        projects.forEach(function(proj, projIdx) {
+            var projCollapsed = !!collapsedMap['proj_' + projIdx];
+            var projStatusCls = ganttStatusCls(proj.status);
 
-            // ── Left panel: parent/task row
-            taskHtml += '<div class="gantt-task-row' + (isParent ? ' parent-row' : '') + '"'
-                      + ' data-id="' + task.id + '" onclick="openEditGantt(' + task.id + ')">';
-            if (isParent) {
-                taskHtml += '<button class="gantt-expand-btn" onclick="toggleCollapse(event,' + task.id + ')">'
-                          + (collapsed ? '+' : '&minus;') + '</button>';
-            } else {
-                taskHtml += '<span style="width:22px;flex-shrink:0;display:inline-block;"></span>';
-            }
-            taskHtml += '<div class="gantt-task-label' + (isParent ? ' parent-label' : '') + '">'
-                      + '<span class="gantt-priority-dot ' + task.priority + '"></span>'
-                      + '<span style="overflow:hidden;text-overflow:ellipsis;">' + escHtml(task.title) + '</span>'
-                      + '</div></div>';
+            // ── Level-0: Project row (left panel)
+            taskHtml += '<div class="gantt-task-row level-0">';
+            taskHtml += '<button class="gantt-expand-btn" onclick="toggleProject(event,' + projIdx + ')">'
+                      + (projCollapsed ? '+' : '&minus;') + '</button>';
+            taskHtml += '<div class="gantt-task-label level-0-label">' + escHtml(proj.name) + '</div>';
+            taskHtml += '</div>';
 
-            // ── Right panel: task timeline row
-            tlWrap += '<div class="gantt-tl-row' + (isParent ? ' parent-tl-row' : '') + '"'
-                    + ' data-id="' + task.id + '" style="width:' + totalWidth + 'px;">';
-            months.forEach(function() { tlWrap += '<div class="gantt-grid-cell" style="width:' + MONTH_PX + 'px;"></div>'; });
-            if (task.start_date && task.end_date) {
-                var lx = toPx(task.start_date).toFixed(1);
-                var bw = barW(task.start_date, task.end_date).toFixed(1);
-                tlWrap += '<div class="gantt-bar ' + sCls + (isParent ? ' parent-bar' : '') + '"'
-                        + ' style="left:' + lx + 'px;width:' + bw + 'px;"'
-                        + ' title="' + escHtml(task.title) + ': ' + task.start_date + ' → ' + task.end_date + '"'
-                        + ' onclick="event.stopPropagation();openEditGantt(' + task.id + ')">'
-                        + (parseFloat(bw) > 30 ? escHtml(task.title) : '')
+            // Level-0 timeline row (right panel)
+            tlWrap += '<div class="gantt-tl-row level-0-row" style="width:' + totalWidth + 'px;">';
+            tlWrap += gridCells();
+            if (proj.start_date && proj.end_date) {
+                var plx = toPx(proj.start_date).toFixed(1);
+                var pbw = barW(proj.start_date, proj.end_date).toFixed(1);
+                tlWrap += '<div class="gantt-bar summary-bar ' + projStatusCls + '"'
+                        + ' style="left:' + plx + 'px;width:' + pbw + 'px;"'
+                        + ' title="' + escHtml(proj.name) + ': ' + proj.start_date + ' → ' + proj.end_date + '">'
+                        + (parseFloat(pbw) > 70 ? escHtml(proj.name) : '')
                         + '</div>';
             }
             tlWrap += '</div>';
 
-            // ── Subtask rows
-            (task.subtasks || []).forEach(function(sub) {
-                var subCls    = ganttStatusCls(sub.status);
-                var hideStyle = collapsed ? 'display:none;' : '';
+            // ── Level-1: Task rows
+            (proj.tasks || []).forEach(function(task) {
+                var hasSubtasks  = task.subtasks && task.subtasks.length > 0;
+                var taskCollapsed = !!collapsedMap['task_' + task.id];
+                var taskStatusCls = ganttStatusCls(task.status);
+                var hideTask = projCollapsed ? 'display:none;' : '';
 
-                // Left panel subtask
-                taskHtml += '<div class="gantt-task-row subtask-row" data-parent="' + task.id + '"'
-                          + ' style="' + hideStyle + '" onclick="openEditGantt(' + sub.id + ')">'
-                          + '<span style="width:22px;flex-shrink:0;display:inline-block;"></span>'
-                          + '<div class="gantt-task-label subtask-label">'
-                          + '<span class="gantt-priority-dot ' + sub.priority + '"></span>'
-                          + '<span style="overflow:hidden;text-overflow:ellipsis;">' + escHtml(sub.title) + '</span>'
+                // Level-1 left panel
+                taskHtml += '<div class="gantt-task-row level-1" data-level="1" data-proj="' + projIdx + '"'
+                          + ' style="' + hideTask + '" onclick="openEditGantt(' + task.id + ')">';
+                if (hasSubtasks) {
+                    taskHtml += '<button class="gantt-expand-btn" onclick="toggleTask(event,' + task.id + ',' + projIdx + ')">'
+                              + (taskCollapsed ? '+' : '&minus;') + '</button>';
+                } else {
+                    taskHtml += '<span style="width:22px;flex-shrink:0;display:inline-block;"></span>';
+                }
+                taskHtml += '<div class="gantt-task-label level-1-label">'
+                          + '<span class="gantt-priority-dot ' + task.priority + '"></span>'
+                          + '<span style="overflow:hidden;text-overflow:ellipsis;">' + escHtml(stripPrefix(task.title)) + '</span>'
                           + '</div></div>';
 
-                // Right panel subtask
-                tlWrap += '<div class="gantt-tl-row subtask-row" data-parent="' + task.id + '"'
-                        + ' style="width:' + totalWidth + 'px;' + hideStyle + '">';
-                months.forEach(function() { tlWrap += '<div class="gantt-grid-cell" style="width:' + MONTH_PX + 'px;"></div>'; });
-                if (sub.start_date && sub.end_date) {
-                    var slx = toPx(sub.start_date).toFixed(1);
-                    var sbw = barW(sub.start_date, sub.end_date).toFixed(1);
-                    tlWrap += '<div class="gantt-bar subtask-bar ' + subCls + '"'
-                            + ' style="left:' + slx + 'px;width:' + sbw + 'px;"'
-                            + ' title="' + escHtml(sub.title) + ': ' + sub.start_date + ' → ' + sub.end_date + '"'
-                            + ' onclick="event.stopPropagation();openEditGantt(' + sub.id + ')">'
-                            + (parseFloat(sbw) > 50 ? escHtml(sub.title) : '')
+                // Level-1 right panel
+                tlWrap += '<div class="gantt-tl-row level-1-row" data-level="1" data-proj="' + projIdx + '"'
+                        + ' style="width:' + totalWidth + 'px;' + hideTask + '">';
+                tlWrap += gridCells();
+                if (task.start_date && task.end_date) {
+                    var tlx = toPx(task.start_date).toFixed(1);
+                    var tbw = barW(task.start_date, task.end_date).toFixed(1);
+                    tlWrap += '<div class="gantt-bar task-bar ' + taskStatusCls + '"'
+                            + ' style="left:' + tlx + 'px;width:' + tbw + 'px;"'
+                            + ' title="' + escHtml(task.title) + ': ' + task.start_date + ' → ' + task.end_date + '"'
+                            + ' onclick="event.stopPropagation();openEditGantt(' + task.id + ')">'
+                            + (parseFloat(tbw) > 30 ? escHtml(stripPrefix(task.title)) : '')
                             + '</div>';
                 }
                 tlWrap += '</div>';
+
+                // ── Level-2: Subtask rows
+                (task.subtasks || []).forEach(function(sub) {
+                    var subStatusCls = ganttStatusCls(sub.status);
+                    var hideSub = (projCollapsed || taskCollapsed) ? 'display:none;' : '';
+
+                    // Level-2 left panel
+                    taskHtml += '<div class="gantt-task-row level-2" data-level="2"'
+                              + ' data-proj="' + projIdx + '" data-task="' + task.id + '"'
+                              + ' style="' + hideSub + '" onclick="openEditGantt(' + sub.id + ')">'
+                              + '<span style="width:22px;flex-shrink:0;display:inline-block;"></span>'
+                              + '<div class="gantt-task-label level-2-label">'
+                              + '<span class="gantt-priority-dot ' + sub.priority + '"></span>'
+                              + '<span style="overflow:hidden;text-overflow:ellipsis;">' + escHtml(sub.title) + '</span>'
+                              + '</div></div>';
+
+                    // Level-2 right panel
+                    tlWrap += '<div class="gantt-tl-row level-2-row" data-level="2"'
+                            + ' data-proj="' + projIdx + '" data-task="' + task.id + '"'
+                            + ' style="width:' + totalWidth + 'px;' + hideSub + '">';
+                    tlWrap += gridCells();
+                    if (sub.start_date && sub.end_date) {
+                        var slx = toPx(sub.start_date).toFixed(1);
+                        var sbw = barW(sub.start_date, sub.end_date).toFixed(1);
+                        tlWrap += '<div class="gantt-bar subtask-bar ' + subStatusCls + '"'
+                                + ' style="left:' + slx + 'px;width:' + sbw + 'px;"'
+                                + ' title="' + escHtml(sub.title) + ': ' + sub.start_date + ' → ' + sub.end_date + '"'
+                                + ' onclick="event.stopPropagation();openEditGantt(' + sub.id + ')">'
+                                + (parseFloat(sbw) > 50 ? escHtml(sub.title) : '')
+                                + '</div>';
+                    }
+                    tlWrap += '</div>';
+                });
             });
         });
     }
@@ -887,7 +948,7 @@ function buildGantt(tasks) {
     document.getElementById('gantt-task-body').innerHTML = taskHtml;
     document.getElementById('gantt-body').innerHTML = tlWrap;
 
-    // Synchronized scrolling: body drives header X and task panel Y
+    // Synchronized scrolling
     var body        = document.getElementById('gantt-body');
     var taskBody    = document.getElementById('gantt-task-body');
     var headerInner = document.getElementById('gantt-header-inner');
@@ -912,29 +973,56 @@ function scrollToToday() {
     body.scrollLeft = Math.max(0, todayPx - body.clientWidth / 2);
 }
 
-function toggleCollapse(e, parentId) {
+function toggleProject(e, projIdx) {
     e.stopPropagation();
-    collapsedMap[parentId] = !collapsedMap[parentId];
-    var collapsed = collapsedMap[parentId];
+    var key = 'proj_' + projIdx;
+    collapsedMap[key] = !collapsedMap[key];
+    var collapsed = collapsedMap[key];
     e.currentTarget.innerHTML = collapsed ? '+' : '&minus;';
-    document.querySelectorAll('#gantt-task-body [data-parent="' + parentId + '"]').forEach(function(el) {
-        el.style.display = collapsed ? 'none' : '';
-    });
-    document.querySelectorAll('#gantt-body [data-parent="' + parentId + '"]').forEach(function(el) {
-        el.style.display = collapsed ? 'none' : '';
-    });
+
+    if (collapsed) {
+        // Hide all children (level-1 and level-2) under this project
+        document.querySelectorAll(
+            '#gantt-task-body [data-proj="' + projIdx + '"], #gantt-body [data-proj="' + projIdx + '"]'
+        ).forEach(function(el) { el.style.display = 'none'; });
+    } else {
+        // Show level-1 rows
+        document.querySelectorAll(
+            '#gantt-task-body [data-proj="' + projIdx + '"][data-level="1"], #gantt-body [data-proj="' + projIdx + '"][data-level="1"]'
+        ).forEach(function(el) { el.style.display = ''; });
+        // Show level-2 rows only if their task is not collapsed
+        document.querySelectorAll(
+            '#gantt-task-body [data-proj="' + projIdx + '"][data-level="2"], #gantt-body [data-proj="' + projIdx + '"][data-level="2"]'
+        ).forEach(function(el) {
+            var taskId = el.dataset.task;
+            if (!collapsedMap['task_' + taskId]) el.style.display = '';
+        });
+    }
+}
+
+function toggleTask(e, taskId, projIdx) {
+    e.stopPropagation();
+    var key = 'task_' + taskId;
+    collapsedMap[key] = !collapsedMap[key];
+    var collapsed = collapsedMap[key];
+    e.currentTarget.innerHTML = collapsed ? '+' : '&minus;';
+
+    document.querySelectorAll(
+        '#gantt-task-body [data-task="' + taskId + '"], #gantt-body [data-task="' + taskId + '"]'
+    ).forEach(function(el) { el.style.display = collapsed ? 'none' : ''; });
 }
 
 function openEditGantt(id) {
-    var allTasks = [];
-    ganttCache.forEach(function(t) {
-        allTasks.push(t);
-        (t.subtasks || []).forEach(function(s) { allTasks.push(s); });
+    var found = null;
+    (ganttCache || []).forEach(function(proj) {
+        (proj.tasks || []).forEach(function(t) {
+            if (t.id === id) found = t;
+            (t.subtasks || []).forEach(function(s) { if (s.id === id) found = s; });
+        });
     });
-    var task = allTasks.find(function(t) { return t.id === id; });
-    if (task) {
-        openEdit(task.id, task.title, task.description || '', task.priority, task.status,
-                 task.start_date || '', task.end_date || '');
+    if (found) {
+        openEdit(found.id, found.title, found.description || '', found.priority, found.status,
+                 found.start_date || '', found.end_date || '');
     }
 }
 
