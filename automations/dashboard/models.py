@@ -1,5 +1,35 @@
 from django.db import models
 
+
+class ProjectTask(models.Model):
+    STATUS_CHOICES = [
+        ('backlog', 'Backlog'),
+        ('todo', 'To Do'),
+        ('in_progress', 'In Progress'),
+        ('review', 'Review'),
+        ('done', 'Done'),
+    ]
+    PRIORITY_CHOICES = [
+        ('critical', 'Critical'),
+        ('high', 'High'),
+        ('medium', 'Medium'),
+        ('low', 'Low'),
+    ]
+
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='backlog')
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return self.title
+
+
 class TurnoverData(models.Model):
     debtor = models.CharField(max_length=100)
     debtor_name = models.CharField(max_length=255)

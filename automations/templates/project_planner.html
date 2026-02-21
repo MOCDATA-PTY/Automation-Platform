@@ -1,0 +1,599 @@
+{% extends 'base.html' %}
+
+{% block title %}Project Planner - MOC Automations{% endblock %}
+
+{% block extra_styles %}
+/* Banner */
+.page-banner {
+    background: #054B70;
+    border-radius: 8px;
+    padding: 32px 36px 28px;
+    margin-bottom: 28px;
+    position: relative;
+    overflow: hidden;
+}
+.page-banner::before {
+    content: ''; position: absolute; top: -80px; right: -60px;
+    width: 260px; height: 260px; border-radius: 50%;
+    background: rgba(148,188,204,0.12); pointer-events: none;
+}
+.page-banner::after {
+    content: ''; position: absolute; bottom: -60px; left: 240px;
+    width: 180px; height: 180px; border-radius: 50%;
+    background: rgba(148,188,204,0.08); pointer-events: none;
+}
+.banner-eyebrow { font-size:10px; font-weight:600; color:rgba(255,255,255,0.5); letter-spacing:1.8px; text-transform:uppercase; margin-bottom:6px; position:relative; z-index:1; }
+.banner-title { font-size:26px; font-weight:700; color:#fff; margin-bottom:4px; position:relative; z-index:1; }
+.banner-subtitle { font-size:13px; color:rgba(255,255,255,0.55); margin-bottom:28px; position:relative; z-index:1; }
+.banner-stats { display:flex; gap:36px; flex-wrap:wrap; position:relative; z-index:1; }
+.banner-stat { border-top:2px solid rgba(148,188,204,0.35); padding-top:10px; min-width:60px; }
+.banner-stat-num { font-size:26px; font-weight:700; color:#fff; line-height:1; }
+.banner-stat-label { font-size:10px; font-weight:600; color:rgba(255,255,255,0.45); text-transform:uppercase; letter-spacing:0.8px; margin-top:3px; }
+
+/* Kanban board */
+.kanban-board {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    overflow-x: auto;
+    padding-bottom: 8px;
+}
+
+.kanban-col {
+    flex: 0 0 220px;
+    background: #f3f2f1;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 260px);
+}
+
+.col-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px 10px;
+    flex-shrink: 0;
+}
+
+.col-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #605e5c;
+}
+
+.col-count {
+    background: #edebe9;
+    color: #605e5c;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 1px 7px;
+    min-width: 20px;
+    text-align: center;
+}
+
+.col-body {
+    padding: 0 8px;
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.col-body::-webkit-scrollbar { width: 4px; }
+.col-body::-webkit-scrollbar-track { background: transparent; }
+.col-body::-webkit-scrollbar-thumb { background: #c8c6c4; border-radius: 2px; }
+
+/* Drop zone highlight */
+.kanban-col.drag-over { background: #e8f0f5; }
+.kanban-col.drag-over .col-body { outline: 2px dashed #94BCCC; border-radius: 6px; outline-offset: -4px; }
+
+/* Task cards */
+.task-card {
+    background: #fff;
+    border: 1px solid #edebe9;
+    border-radius: 6px;
+    padding: 10px 12px;
+    cursor: grab;
+    position: relative;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+    user-select: none;
+}
+
+.task-card:hover {
+    border-color: #c7e0f4;
+    box-shadow: 0 2px 8px rgba(5,75,112,0.08);
+}
+
+.task-card.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+}
+
+.task-priority-bar {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    border-radius: 6px 0 0 6px;
+}
+.task-priority-bar.critical { background: #d13438; }
+.task-priority-bar.high     { background: #ca5010; }
+.task-priority-bar.medium   { background: #054B70; }
+.task-priority-bar.low      { background: #c8c6c4; }
+
+.task-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #1b1a19;
+    line-height: 1.4;
+    margin-left: 8px;
+    margin-right: 18px;
+    word-break: break-word;
+}
+
+.task-desc {
+    font-size: 11px;
+    color: #a19f9d;
+    margin: 4px 0 0 8px;
+    line-height: 1.4;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.task-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    margin-left: 8px;
+}
+
+.task-date {
+    font-size: 10px;
+    color: #c8c6c4;
+}
+
+.task-priority-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 10px;
+    text-transform: capitalize;
+}
+.task-priority-badge.critical { background: #fde7e9; color: #d13438; }
+.task-priority-badge.high     { background: #fdf1e6; color: #ca5010; }
+.task-priority-badge.medium   { background: #edf4f8; color: #054B70; }
+.task-priority-badge.low      { background: #f3f2f1; color: #a19f9d; }
+
+.task-delete {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 18px; height: 18px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #c8c6c4;
+    font-size: 14px;
+    line-height: 1;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.1s ease, color 0.1s ease;
+    padding: 0;
+}
+
+.task-card:hover .task-delete { opacity: 1; }
+.task-delete:hover { color: #d13438; }
+
+/* Add task button */
+.add-task-btn {
+    margin: 8px;
+    padding: 8px 12px;
+    background: none;
+    border: 1px dashed #c8c6c4;
+    border-radius: 6px;
+    color: #a19f9d;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    width: calc(100% - 16px);
+    flex-shrink: 0;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.add-task-btn:hover {
+    border-color: #054B70;
+    color: #054B70;
+    background: #edf4f8;
+}
+
+/* Modal */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.open {
+    display: flex;
+}
+
+.modal-box {
+    background: #fff;
+    border-radius: 8px;
+    padding: 28px;
+    width: 420px;
+    max-width: calc(100vw - 40px);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+}
+
+.modal-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1b1a19;
+    margin-bottom: 20px;
+}
+
+.modal-field {
+    margin-bottom: 14px;
+}
+
+.modal-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #605e5c;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.modal-input, .modal-textarea, .modal-select {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    border: 1.5px solid #edebe9;
+    border-radius: 6px;
+    outline: none;
+    color: #1b1a19;
+    background: #fff;
+    transition: border-color 0.15s ease;
+}
+
+.modal-input:focus, .modal-textarea:focus, .modal-select:focus {
+    border-color: #054B70;
+    box-shadow: 0 0 0 3px rgba(5,75,112,0.08);
+}
+
+.modal-textarea { resize: vertical; min-height: 72px; }
+
+.modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.btn-primary {
+    background: #054B70;
+    color: #fff;
+    border: none;
+    padding: 9px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.btn-primary:hover { background: #043a58; }
+
+.btn-cancel {
+    background: #f3f2f1;
+    color: #323130;
+    border: none;
+    padding: 9px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.btn-cancel:hover { background: #edebe9; }
+
+/* Edit modal for task detail */
+.task-card { cursor: default; }
+.task-title-clickable { cursor: pointer; }
+.task-title-clickable:hover { color: #054B70; }
+{% endblock %}
+
+{% block content %}
+<div class="page-banner">
+    <div class="banner-eyebrow">MOC Automations</div>
+    <div class="banner-title">Project Planner</div>
+    <div class="banner-subtitle">Track tasks, bugs, and features across your development workflow</div>
+    <div class="banner-stats">
+        <div class="banner-stat">
+            <div class="banner-stat-num" id="stat-total">{{ total }}</div>
+            <div class="banner-stat-label">Total tasks</div>
+        </div>
+        <div class="banner-stat">
+            <div class="banner-stat-num" id="stat-inprogress">{{ in_progress }}</div>
+            <div class="banner-stat-label">In progress</div>
+        </div>
+        <div class="banner-stat">
+            <div class="banner-stat-num" id="stat-done">{{ done }}</div>
+            <div class="banner-stat-label">Done</div>
+        </div>
+    </div>
+</div>
+
+<!-- Kanban board -->
+<div class="kanban-board" id="kanban-board">
+    {% for col in columns %}
+    <div class="kanban-col" id="col-{{ col.key }}" data-status="{{ col.key }}"
+         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <div class="col-header">
+            <span class="col-title">{{ col.label }}</span>
+            <span class="col-count" id="count-{{ col.key }}">{{ col.tasks|length }}</span>
+        </div>
+        <div class="col-body" id="tasks-{{ col.key }}">
+            {% for task in col.tasks %}
+            <div class="task-card" id="task-{{ task.id }}" draggable="true"
+                 data-id="{{ task.id }}" data-status="{{ col.key }}"
+                 ondragstart="onDragStart(event)">
+                <div class="task-priority-bar {{ task.priority }}"></div>
+                <button class="task-delete" title="Delete" onclick="deleteTask({{ task.id }}, event)">×</button>
+                <div class="task-title task-title-clickable" onclick="openEdit({{ task.id }}, '{{ task.title|escapejs }}', '{{ task.description|escapejs }}', '{{ task.priority }}', '{{ col.key }}')">{{ task.title }}</div>
+                {% if task.description %}
+                <div class="task-desc">{{ task.description }}</div>
+                {% endif %}
+                <div class="task-footer">
+                    <span class="task-date">{{ task.created_at }}</span>
+                    <span class="task-priority-badge {{ task.priority }}">{{ task.priority }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <button class="add-task-btn" onclick="openAdd('{{ col.key }}')">+ Add task</button>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Add task modal -->
+<div class="modal-overlay" id="addModal">
+    <div class="modal-box">
+        <div class="modal-title">New Task</div>
+        <input type="hidden" id="addStatus" value="backlog">
+        <div class="modal-field">
+            <label class="modal-label">Title *</label>
+            <input type="text" class="modal-input" id="addTitle" placeholder="What needs to be done?" autofocus>
+        </div>
+        <div class="modal-field">
+            <label class="modal-label">Description</label>
+            <textarea class="modal-textarea" id="addDesc" placeholder="Optional details..."></textarea>
+        </div>
+        <div class="modal-field">
+            <label class="modal-label">Priority</label>
+            <select class="modal-select" id="addPriority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+            </select>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeModal('addModal')">Cancel</button>
+            <button class="btn-primary" onclick="submitAdd()">Add Task</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit task modal -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal-box">
+        <div class="modal-title">Edit Task</div>
+        <input type="hidden" id="editId">
+        <div class="modal-field">
+            <label class="modal-label">Title *</label>
+            <input type="text" class="modal-input" id="editTitle">
+        </div>
+        <div class="modal-field">
+            <label class="modal-label">Description</label>
+            <textarea class="modal-textarea" id="editDesc"></textarea>
+        </div>
+        <div class="modal-field">
+            <label class="modal-label">Priority</label>
+            <select class="modal-select" id="editPriority">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+            </select>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeModal('editModal')">Cancel</button>
+            <button class="btn-primary" onclick="submitEdit()">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var draggedId = null;
+var csrf = document.cookie.match('(^|;) ?csrftoken=([^;]*)')[2];
+
+/* ── Drag & drop ── */
+function onDragStart(e) {
+    draggedId = e.currentTarget.dataset.id;
+    setTimeout(function() { e.currentTarget.classList.add('dragging'); }, 0);
+}
+
+function onDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+}
+
+function onDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function onDrop(e) {
+    e.preventDefault();
+    var col = e.currentTarget;
+    col.classList.remove('drag-over');
+    var newStatus = col.dataset.status;
+    if (!draggedId) return;
+
+    var card = document.getElementById('task-' + draggedId);
+    if (card) {
+        card.classList.remove('dragging');
+        document.getElementById('tasks-' + newStatus).appendChild(card);
+        card.dataset.status = newStatus;
+        updateCounts();
+    }
+
+    fetch('/planner/task/' + draggedId + '/update/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+    });
+    draggedId = null;
+}
+
+document.addEventListener('dragend', function() {
+    document.querySelectorAll('.task-card').forEach(function(c) { c.classList.remove('dragging'); });
+});
+
+/* ── Counts & stats ── */
+function updateCounts() {
+    var total = 0, inProgress = 0, done = 0;
+    ['backlog','todo','in_progress','review','done'].forEach(function(s) {
+        var n = document.getElementById('tasks-' + s).children.length;
+        var el = document.getElementById('count-' + s);
+        if (el) el.textContent = n;
+        total += n;
+        if (s === 'in_progress') inProgress = n;
+        if (s === 'done') done = n;
+    });
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-inprogress').textContent = inProgress;
+    document.getElementById('stat-done').textContent = done;
+}
+
+/* ── Add task ── */
+function openAdd(status) {
+    document.getElementById('addStatus').value = status;
+    document.getElementById('addTitle').value = '';
+    document.getElementById('addDesc').value = '';
+    document.getElementById('addPriority').value = 'medium';
+    document.getElementById('addModal').classList.add('open');
+    setTimeout(function() { document.getElementById('addTitle').focus(); }, 50);
+}
+
+function submitAdd() {
+    var title = document.getElementById('addTitle').value.trim();
+    if (!title) { document.getElementById('addTitle').focus(); return; }
+
+    var status   = document.getElementById('addStatus').value;
+    var desc     = document.getElementById('addDesc').value.trim();
+    var priority = document.getElementById('addPriority').value;
+
+    var form = new FormData();
+    form.append('csrfmiddlewaretoken', csrf);
+    form.append('title', title);
+    form.append('description', desc);
+    form.append('status', status);
+    form.append('priority', priority);
+
+    fetch('/planner/', { method: 'POST', body: form })
+        .then(function(r) { return r.json(); })
+        .then(function() {
+            closeModal('addModal');
+            location.reload();
+        });
+}
+
+/* ── Edit task ── */
+function openEdit(id, title, desc, priority, status) {
+    document.getElementById('editId').value = id;
+    document.getElementById('editTitle').value = title;
+    document.getElementById('editDesc').value = desc;
+    document.getElementById('editPriority').value = priority;
+    document.getElementById('editModal').classList.add('open');
+    setTimeout(function() { document.getElementById('editTitle').focus(); }, 50);
+}
+
+function submitEdit() {
+    var id    = document.getElementById('editId').value;
+    var title = document.getElementById('editTitle').value.trim();
+    if (!title) { document.getElementById('editTitle').focus(); return; }
+
+    fetch('/planner/task/' + id + '/update/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            title: title,
+            description: document.getElementById('editDesc').value.trim(),
+            priority: document.getElementById('editPriority').value
+        })
+    }).then(function() { location.reload(); });
+
+    closeModal('editModal');
+}
+
+/* ── Delete ── */
+function deleteTask(id, e) {
+    e.stopPropagation();
+    var card = document.getElementById('task-' + id);
+    if (!card) return;
+    card.style.opacity = '0.3';
+
+    fetch('/planner/task/' + id + '/delete/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrf }
+    }).then(function() {
+        card.remove();
+        updateCounts();
+    });
+}
+
+/* ── Modal helpers ── */
+function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+}
+
+document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) overlay.classList.remove('open');
+    });
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.open').forEach(function(m) {
+            m.classList.remove('open');
+        });
+    }
+    if ((e.key === 'Enter') && e.ctrlKey) {
+        if (document.getElementById('addModal').classList.contains('open')) submitAdd();
+        if (document.getElementById('editModal').classList.contains('open')) submitEdit();
+    }
+});
+</script>
+{% endblock %}

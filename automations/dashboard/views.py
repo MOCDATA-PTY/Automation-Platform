@@ -7,7 +7,7 @@ from django.db.models.functions import ExtractYear
 from django.db import OperationalError, ProgrammingError, connection
 from django.http import JsonResponse
 from django.conf import settings as django_settings
-from .models import TurnoverData
+from .models import TurnoverData, ProjectTask
 from .google_drive import sync_google_drive_data, get_progress, update_progress, get_last_sync
 from . import onedrive_sync
 import threading
@@ -100,6 +100,9 @@ def home(request):
         condor_rows = 0
         condor_depts = 0
 
+    planner_total = ProjectTask.objects.count()
+    planner_in_progress = ProjectTask.objects.filter(status='in_progress').count()
+
     context = {
         'total_rows': total_rows,
         'branch_count': branch_count,
@@ -109,6 +112,8 @@ def home(request):
         'creditor_groups': creditor_groups,
         'condor_rows': condor_rows,
         'condor_depts': condor_depts,
+        'planner_total': planner_total,
+        'planner_in_progress': planner_in_progress,
         **station_rows,
     }
     return render(request, 'home.html', context)
@@ -1635,3 +1640,77 @@ def sync_all(request):
 
     threading.Thread(target=run_all, daemon=True).start()
     return JsonResponse({'status': 'started'})
+
+
+# ── Project Planner ──────────────────────────────────────────────────────────
+
+KANBAN_COLUMNS = [
+    ('backlog',     'Backlog'),
+    ('todo',        'To Do'),
+    ('in_progress', 'In Progress'),
+    ('review',      'Review'),
+    ('done',        'Done'),
+]
+
+
+@login_required
+def project_planner(request):
+    if request.method == 'POST':
+        title = request.POST.get('title', '').strip()
+        if title:
+            ProjectTask.objects.create(
+                title=title,
+                description=request.POST.get('description', '').strip(),
+                status=request.POST.get('status', 'backlog'),
+                priority=request.POST.get('priority', 'medium'),
+            )
+        return JsonResponse({'status': 'ok'})
+
+    columns = []
+    for key, label in KANBAN_COLUMNS:
+        tasks = list(ProjectTask.objects.filter(status=key).values(
+            'id', 'title', 'description', 'priority', 'created_at'
+        ))
+        for t in tasks:
+            t['created_at'] = t['created_at'].strftime('%b %d')
+        columns.append({'key': key, 'label': label, 'tasks': tasks})
+
+    total = ProjectTask.objects.count()
+    in_progress = ProjectTask.objects.filter(status='in_progress').count()
+    done = ProjectTask.objects.filter(status='done').count()
+
+    return render(request, 'project_planner.html', {
+        'columns': columns,
+        'total': total,
+        'in_progress': in_progress,
+        'done': done,
+    })
+
+
+@login_required
+def task_update(request, task_id):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error'}, status=405)
+    try:
+        task = ProjectTask.objects.get(pk=task_id)
+        data = json.loads(request.body)
+        if 'status' in data:
+            task.status = data['status']
+        if 'title' in data:
+            task.title = data['title'].strip() or task.title
+        if 'description' in data:
+            task.description = data['description'].strip()
+        if 'priority' in data:
+            task.priority = data['priority']
+        task.save()
+        return JsonResponse({'status': 'ok'})
+    except ProjectTask.DoesNotExist:
+        return JsonResponse({'status': 'not found'}, status=404)
+
+
+@login_required
+def task_delete(request, task_id):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error'}, status=405)
+    ProjectTask.objects.filter(pk=task_id).delete()
+    return JsonResponse({'status': 'ok'})
