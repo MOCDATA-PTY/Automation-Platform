@@ -1688,16 +1688,20 @@ def project_planner(request):
                 description=request.POST.get('description', '').strip(),
                 status=request.POST.get('status', 'backlog'),
                 priority=request.POST.get('priority', 'medium'),
+                start_date=request.POST.get('start_date') or None,
+                end_date=request.POST.get('end_date') or None,
             )
         return JsonResponse({'status': 'ok'})
 
     columns = []
     for key, label in KANBAN_COLUMNS:
         tasks = list(ProjectTask.objects.filter(status=key).values(
-            'id', 'title', 'description', 'priority', 'created_at'
+            'id', 'title', 'description', 'priority', 'created_at', 'start_date', 'end_date'
         ))
         for t in tasks:
             t['created_at'] = t['created_at'].strftime('%b %d')
+            t['start_date'] = t['start_date'].isoformat() if t['start_date'] else None
+            t['end_date'] = t['end_date'].isoformat() if t['end_date'] else None
         columns.append({'key': key, 'label': label, 'tasks': tasks})
 
     total = ProjectTask.objects.count()
@@ -1710,6 +1714,22 @@ def project_planner(request):
         'in_progress': in_progress,
         'done': done,
     })
+
+
+@login_required
+def planner_api(request):
+    """JSON API returning all tasks with date info for the Gantt chart."""
+    tasks = list(ProjectTask.objects.values(
+        'id', 'title', 'description', 'status', 'priority', 'start_date', 'end_date', 'created_at'
+    ))
+    for t in tasks:
+        t['start_date'] = t['start_date'].isoformat() if t['start_date'] else None
+        t['end_date'] = t['end_date'].isoformat() if t['end_date'] else None
+        t['created_at'] = t['created_at'].strftime('%b %d, %Y')
+    total = ProjectTask.objects.count()
+    in_progress = ProjectTask.objects.filter(status='in_progress').count()
+    done = ProjectTask.objects.filter(status='done').count()
+    return JsonResponse({'tasks': tasks, 'total': total, 'in_progress': in_progress, 'done': done})
 
 
 @login_required
@@ -1727,6 +1747,10 @@ def task_update(request, task_id):
             task.description = data['description'].strip()
         if 'priority' in data:
             task.priority = data['priority']
+        if 'start_date' in data:
+            task.start_date = data['start_date'] or None
+        if 'end_date' in data:
+            task.end_date = data['end_date'] or None
         task.save()
         return JsonResponse({'status': 'ok'})
     except ProjectTask.DoesNotExist:

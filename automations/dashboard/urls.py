@@ -64,6 +64,7 @@ urlpatterns = [
     path('onedrive/callback/', views.onedrive_callback, name='onedrive_callback'),
     path('onedrive/check/', views.onedrive_check, name='onedrive_check'),
     path('planner/', views.project_planner, name='project_planner'),
+    path('planner/api/', views.planner_api, name='planner_api'),
     path('planner/task/<int:task_id>/update/', views.task_update, name='task_update'),
     path('planner/task/<int:task_id>/delete/', views.task_delete, name='task_delete'),
 ]
