@@ -3267,6 +3267,10 @@ def sync_creditor_data():
                 )
             print(f'{group}: Inserted {len(all_rows)} rows')
             grand_total += len(all_rows)
+            if delete_file(file_info['id']):
+                print(f'{group}: Deleted from OneDrive')
+            else:
+                print(f'{group}: Failed to delete from OneDrive')
         else:
             print(f'{group}: No data rows')
 
