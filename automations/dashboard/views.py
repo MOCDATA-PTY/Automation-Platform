@@ -1511,6 +1511,7 @@ def _get_station_statuses():
         sync_file = getattr(django_settings, f'{station.upper()}_LAST_SYNC_FILE', None)
         last_sync_dt = None
         last_sync_display = None
+        synced_data = False  # True when an actual last_sync file was found
 
         if sync_file and os.path.exists(sync_file):
             try:
@@ -1522,13 +1523,13 @@ def _get_station_statuses():
                         'time': last_sync_dt.strftime('%H:%M'),
                         'date': last_sync_dt.strftime('%b %d, %Y'),
                     }
+                    synced_data = True
             except Exception:
                 pass
 
         # Read health info
         health = health_data.get(station, {})
         health_status = health.get('status', 'unknown')
-        health_message = health.get('message', '')
 
         # Fallback: if no last_sync file, use sync_health last_check so the
         # monitor shows when the job last ran (e.g. "No file" syncs like CCC)
@@ -1567,6 +1568,16 @@ def _get_station_statuses():
             status = 'healthy'
             healthy_count += 1
 
+        # Build a meaningful message from available data
+        if health_status == 'error':
+            message = health.get('message', 'Sync error')
+        elif not synced_data:
+            message = 'No file in OneDrive'
+        elif records is not None:
+            message = f'Synced {records:,} records'
+        else:
+            message = 'OK'
+
         # Time ago string
         time_ago = None
         if last_sync_dt:
@@ -1588,7 +1599,7 @@ def _get_station_statuses():
             'time_ago': time_ago,
             'status': status,
             'health_status': health_status,
-            'message': health_message,
+            'message': message,
             'records': records,
         })
 
