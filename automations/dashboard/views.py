@@ -1602,3 +1602,36 @@ def sync_monitor_api(request):
         'stale_count': stale,
         'error_count': errors,
     })
+
+
+@login_required
+def sync_all(request):
+    """Trigger a manual sync of all stations"""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+
+    if not onedrive_sync.get_access_token():
+        return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+    def run_all():
+        from .scheduler import (
+            run_sync_job, run_ppg_sync_job, run_dor_sync_job,
+            run_con_sync_job, run_ccd_sync_job, run_atl_sync_job,
+            run_ccc_sync_job, run_hnl_sync_job, run_jfk_sync_job,
+            run_fax_sync_job, run_hou_sync_job, run_ics_sync_job,
+            run_imp_sync_job, run_lax_sync_job, run_lcl_sync_job,
+            run_ord_sync_job, run_creditor_sync_job, run_condor_dor_sync_job,
+        )
+        fns = [
+            run_sync_job, run_ppg_sync_job, run_dor_sync_job,
+            run_con_sync_job, run_ccd_sync_job, run_atl_sync_job,
+            run_ccc_sync_job, run_hnl_sync_job, run_jfk_sync_job,
+            run_fax_sync_job, run_hou_sync_job, run_ics_sync_job,
+            run_imp_sync_job, run_lax_sync_job, run_lcl_sync_job,
+            run_ord_sync_job, run_creditor_sync_job, run_condor_dor_sync_job,
+        ]
+        for fn in fns:
+            threading.Thread(target=fn, daemon=True).start()
+
+    threading.Thread(target=run_all, daemon=True).start()
+    return JsonResponse({'status': 'started'})
