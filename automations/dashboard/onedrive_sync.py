@@ -1721,6 +1721,10 @@ def sync_ccc_data():
 
     if not excel_files:
         print("No Excel files found in CCC folder")
+        from zoneinfo import ZoneInfo
+        local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+        with open(settings.CCC_LAST_SYNC_FILE, 'w') as f:
+            json.dump({'last_sync': local_time.isoformat()}, f)
         return 0
 
     print(f"\nFound {len(excel_files)} Excel file(s) with '2026' in name:")
@@ -1753,6 +1757,10 @@ def sync_ccc_data():
 
     if not all_rows:
         print("\n✓ No data to sync")
+        from zoneinfo import ZoneInfo
+        local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+        with open(settings.CCC_LAST_SYNC_FILE, 'w') as f:
+            json.dump({'last_sync': local_time.isoformat()}, f)
         return 0
 
     print(f"\nTotal rows from all files: {len(all_rows)}")
