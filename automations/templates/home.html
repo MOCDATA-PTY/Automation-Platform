@@ -4,52 +4,96 @@
 {% block title %}Home - MOC Automations{% endblock %}
 
 {% block extra_styles %}
-.home-header {
+/* Banner — same design language as monitor page */
+.page-banner {
+    background: #054B70;
+    border-radius: 8px;
+    padding: 32px 36px 28px;
     margin-bottom: 28px;
+    position: relative;
+    overflow: hidden;
 }
 
-.home-title {
+.page-banner::before {
+    content: '';
+    position: absolute;
+    top: -80px;
+    right: -60px;
+    width: 260px;
+    height: 260px;
+    border-radius: 50%;
+    background: rgba(148, 188, 204, 0.12);
+    pointer-events: none;
+}
+
+.page-banner::after {
+    content: '';
+    position: absolute;
+    bottom: -60px;
+    left: 240px;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: rgba(148, 188, 204, 0.08);
+    pointer-events: none;
+}
+
+.banner-eyebrow {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    position: relative;
+    z-index: 1;
+}
+
+.banner-title {
     font-size: 26px;
     font-weight: 700;
-    color: #1b1a19;
+    color: #fff;
     margin-bottom: 4px;
+    position: relative;
+    z-index: 1;
 }
 
-.home-subtitle {
-    font-size: 14px;
-    color: #a19f9d;
-}
-
-/* Summary bar */
-.summary-bar {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 28px;
-    flex-wrap: wrap;
-}
-
-.summary-pill {
-    background: #fff;
-    border: 1px solid #edebe9;
-    border-radius: 20px;
-    padding: 8px 18px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+.banner-subtitle {
     font-size: 13px;
-    color: #323130;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 28px;
+    position: relative;
+    z-index: 1;
 }
 
-.summary-pill svg {
-    width: 15px;
-    height: 15px;
-    fill: #054B70;
-    flex-shrink: 0;
+.banner-stats {
+    display: flex;
+    gap: 36px;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 1;
 }
 
-.summary-pill strong {
+.banner-stat {
+    border-top: 2px solid rgba(148, 188, 204, 0.35);
+    padding-top: 10px;
+    min-width: 64px;
+}
+
+.banner-stat-num {
+    font-size: 26px;
     font-weight: 700;
-    color: #054B70;
+    color: #fff;
+    line-height: 1;
+}
+
+.banner-stat-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.45);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-top: 3px;
 }
 
 /* Section label */
@@ -222,23 +266,27 @@
 {% endblock %}
 
 {% block content %}
-<div class="home-header">
-    <h1 class="home-title">MOC Automations</h1>
-    <p class="home-subtitle">Select a station to view connection details and sync status</p>
-</div>
-
-<div class="summary-bar">
-    <div class="summary-pill">
-        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
-        <span><strong>18</strong> Active stations</span>
-    </div>
-    <div class="summary-pill">
-        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
-        <span>Syncing every <strong>1 hour</strong></span>
-    </div>
-    <div class="summary-pill">
-        <svg viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
-        <span>Token refresh every <strong>5 min</strong></span>
+<div class="page-banner">
+    <div class="banner-eyebrow">MOC Automations</div>
+    <div class="banner-title">Dashboard</div>
+    <div class="banner-subtitle">Select a station to view connection details and sync status</div>
+    <div class="banner-stats">
+        <div class="banner-stat">
+            <div class="banner-stat-num">18</div>
+            <div class="banner-stat-label">Stations</div>
+        </div>
+        <div class="banner-stat">
+            <div class="banner-stat-num">1hr</div>
+            <div class="banner-stat-label">Sync cycle</div>
+        </div>
+        <div class="banner-stat">
+            <div class="banner-stat-num">5min</div>
+            <div class="banner-stat-label">Token refresh</div>
+        </div>
+        <div class="banner-stat">
+            <div class="banner-stat-num">24/7</div>
+            <div class="banner-stat-label">Uptime</div>
+        </div>
     </div>
 </div>
 
