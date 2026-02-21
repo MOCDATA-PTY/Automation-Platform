@@ -129,93 +129,175 @@
 .task-title-clickable:hover { color: #054B70; }
 
 /* ──────── GANTT ──────── */
-.gantt-wrapper {
-    background: #fff;
+.gantt-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+.btn-goto-today {
+    background: #054B70;
+    color: #fff;
+    border: none;
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.btn-goto-today:hover { background: #043a58; }
+.gantt-legend { display:flex; gap:16px; flex-wrap:wrap; }
+.legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:#605e5c; font-weight:600; }
+.legend-dot { width:10px; height:10px; border-radius:3px; }
+.legend-dot.not-started { background:#a19f9d; }
+.legend-dot.in-progress { background:#054B70; }
+.legend-dot.completed   { background:#107c10; }
+.legend-dot.today       { background:rgba(5,75,112,0.5); width:3px; border-radius:0; }
+
+/* Two-panel container */
+.gantt-container {
+    display: flex;
     border: 1px solid #edebe9;
     border-radius: 8px;
     overflow: hidden;
-    width: 100%;
+    background: #fff;
+    height: calc(100vh - 400px);
+    min-height: 420px;
 }
-.gantt-scroll { overflow-x: auto; width: 100%; }
-.gantt-table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-}
-.gantt-label-col { width: 220px; min-width: 220px; }
-.gantt-month-col { }
 
-/* Header */
-.gantt-thead th {
+/* Left: task name panel */
+.gantt-task-panel {
+    width: 260px;
+    min-width: 260px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 2px solid #edebe9;
+    overflow: hidden;
+}
+.gantt-task-header {
+    height: 40px;
     background: #f3f2f1;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
     font-size: 11px;
     font-weight: 700;
     color: #605e5c;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    padding: 10px 12px;
+    flex-shrink: 0;
     border-bottom: 1px solid #edebe9;
+}
+.gantt-task-body { flex:1; overflow-y:auto; overflow-x:hidden; }
+.gantt-task-body::-webkit-scrollbar { width:4px; }
+.gantt-task-body::-webkit-scrollbar-track { background:transparent; }
+.gantt-task-body::-webkit-scrollbar-thumb { background:#c8c6c4; border-radius:2px; }
+
+/* Right: timeline panel */
+.gantt-timeline-panel { flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden; }
+.gantt-header-wrapper { flex-shrink:0; overflow:hidden; height:40px; border-bottom:1px solid #edebe9; background:#f3f2f1; }
+.gantt-header-inner { display:flex; height:100%; will-change:transform; }
+.gantt-month-cell {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #605e5c;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     border-right: 1px solid #edebe9;
     white-space: nowrap;
 }
-.gantt-thead th:first-child { text-align: left; border-right: 2px solid #edebe9; }
-.gantt-thead .month-th { text-align: center; }
-
-/* Task rows */
-.gantt-row { border-bottom: 1px solid #f3f2f1; }
-.gantt-row:hover { background: #faf9f8; }
-.gantt-label-cell {
-    padding: 10px 14px;
-    border-right: 2px solid #edebe9;
-    vertical-align: middle;
+.gantt-body {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: auto;
+    position: relative;
 }
-.gantt-task-name {
+.gantt-body::-webkit-scrollbar { width:6px; height:6px; }
+.gantt-body::-webkit-scrollbar-track { background:transparent; }
+.gantt-body::-webkit-scrollbar-thumb { background:#c8c6c4; border-radius:3px; }
+
+/* Task rows (left panel) */
+.gantt-task-row {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px 0 6px;
+    border-bottom: 1px solid #f3f2f1;
+    cursor: pointer;
+    user-select: none;
+    box-sizing: border-box;
+}
+.gantt-task-row:hover { background: #faf9f8; }
+.gantt-task-row.parent-row { background: #f8f7f6; }
+.gantt-task-row.parent-row:hover { background: #f0efee; }
+
+/* Timeline rows (right panel) */
+.gantt-tl-row {
+    height: 40px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #f3f2f1;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+.gantt-tl-row:hover { background: #faf9f8; }
+.gantt-tl-row.parent-tl-row { background: #f8f7f6; }
+.gantt-tl-row.parent-tl-row:hover { background: #f0efee; }
+.gantt-grid-cell { flex-shrink:0; height:100%; border-right:1px solid #f3f2f1; box-sizing:border-box; }
+
+/* Expand/collapse button */
+.gantt-expand-btn {
+    width: 18px; height: 18px;
+    border: 1px solid #c8c6c4;
+    border-radius: 3px;
+    background: #fff;
+    color: #605e5c;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-right: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s;
+    font-family: monospace;
+}
+.gantt-expand-btn:hover { background: #edebe9; }
+
+/* Task name label */
+.gantt-task-label {
+    font-size: 12px;
     color: #1b1a19;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 200px;
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
 }
-.gantt-priority-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
+.gantt-task-label.parent-label { font-weight: 600; }
+.gantt-task-label.subtask-label { font-size: 11px; color: #605e5c; padding-left: 16px; }
+
+.gantt-priority-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
 .gantt-priority-dot.critical { background:#d13438; }
 .gantt-priority-dot.high     { background:#ca5010; }
 .gantt-priority-dot.medium   { background:#054B70; }
 .gantt-priority-dot.low      { background:#c8c6c4; }
-.gantt-status-badge {
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 7px;
-    border-radius: 10px;
-    margin-top: 3px;
-    display: inline-block;
-}
-.gantt-status-badge.not-started { background:#f3f2f1; color:#605e5c; }
-.gantt-status-badge.in-progress { background:#edf4f8; color:#054B70; }
-.gantt-status-badge.completed   { background:#dff6dd; color:#107c10; }
 
-/* Bar cells */
-.gantt-bar-cell {
-    position: relative;
-    padding: 8px 0;
-    border-right: 1px solid #f3f2f1;
-    vertical-align: middle;
-    cursor: pointer;
-}
-.gantt-bar-cell.today-col { background: rgba(5,75,112,0.03); border-right-color: #94BCCC; }
-
-/* The actual bar - spans multiple columns via JS positioning in a wrapper */
-.gantt-cell-area { position: relative; height: 28px; }
-
-/* Continuous bar rendered in first spanned column */
+/* Bars */
 .gantt-bar {
     position: absolute;
     top: 50%;
@@ -223,56 +305,39 @@
     height: 22px;
     border-radius: 4px;
     cursor: pointer;
-    transition: opacity 0.15s, box-shadow 0.15s;
-    z-index: 2;
+    z-index: 3;
     display: flex;
     align-items: center;
-    padding: 0 8px;
+    padding: 0 6px;
     white-space: nowrap;
     overflow: hidden;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     color: #fff;
+    transition: opacity 0.15s, box-shadow 0.15s;
+    min-width: 6px;
+    box-sizing: border-box;
 }
-.gantt-bar:hover { opacity: 0.85; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+.gantt-bar:hover { opacity: 0.85; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
 .gantt-bar.not-started { background: #a19f9d; }
 .gantt-bar.in-progress { background: #054B70; }
 .gantt-bar.completed   { background: #107c10; }
+.gantt-bar.parent-bar  { height: 14px; border-radius: 2px; opacity: 0.9; }
+.gantt-bar.subtask-bar { height: 18px; }
 
 /* Today line */
-.today-line {
+.gantt-today-line {
     position: absolute;
     top: 0; bottom: 0;
     width: 2px;
     background: rgba(5,75,112,0.4);
-    z-index: 3;
+    z-index: 10;
     pointer-events: none;
 }
 
 /* Empty state */
-.gantt-empty {
-    padding: 48px 24px;
-    text-align: center;
-    color: #a19f9d;
-    font-size: 14px;
-}
-.gantt-empty-icon { font-size: 36px; margin-bottom: 12px; }
-
-/* Legend */
-.gantt-legend {
-    display: flex;
-    gap: 16px;
-    padding: 10px 16px;
-    border-top: 1px solid #edebe9;
-    background: #faf9f8;
-    flex-wrap: wrap;
-}
-.legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:#605e5c; font-weight:600; }
-.legend-dot { width:10px; height:10px; border-radius:3px; }
-.legend-dot.not-started { background:#a19f9d; }
-.legend-dot.in-progress { background:#054B70; }
-.legend-dot.completed   { background:#107c10; }
-.legend-dot.today       { background:rgba(5,75,112,0.4); }
+.gantt-empty { padding:48px 24px; text-align:center; color:#a19f9d; font-size:14px; }
+.gantt-empty-icon { font-size:36px; margin-bottom:12px; }
 
 /* ──────── MODAL ──────── */
 .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:1000; align-items:center; justify-content:center; }
@@ -363,20 +428,27 @@
 
 <!-- ── Gantt view ── -->
 <div id="view-gantt" style="display:none;">
-    <div class="gantt-wrapper">
-        <div class="gantt-scroll">
-            <div id="gantt-content">
-                <div class="gantt-empty">
-                    <div class="gantt-empty-icon">📅</div>
-                    Loading Gantt chart...
-                </div>
-            </div>
-        </div>
+    <div class="gantt-toolbar">
         <div class="gantt-legend">
             <div class="legend-item"><div class="legend-dot not-started"></div> Not Started</div>
             <div class="legend-item"><div class="legend-dot in-progress"></div> In Progress</div>
             <div class="legend-item"><div class="legend-dot completed"></div> Completed</div>
-            <div class="legend-item"><div class="legend-dot today" style="width:3px;border-radius:0;"></div> Today</div>
+            <div class="legend-item"><div class="legend-dot today"></div> Today</div>
+        </div>
+        <button class="btn-goto-today" onclick="scrollToToday()">&#8594; Go to Today</button>
+    </div>
+    <div class="gantt-container">
+        <!-- Left: task names -->
+        <div class="gantt-task-panel">
+            <div class="gantt-task-header">Task</div>
+            <div class="gantt-task-body" id="gantt-task-body"></div>
+        </div>
+        <!-- Right: timeline -->
+        <div class="gantt-timeline-panel">
+            <div class="gantt-header-wrapper">
+                <div class="gantt-header-inner" id="gantt-header-inner"></div>
+            </div>
+            <div class="gantt-body" id="gantt-body"></div>
         </div>
     </div>
 </div>
@@ -649,168 +721,221 @@ document.addEventListener('keydown', function(e) {
 /* ────────────────────────────────────────────
    GANTT CHART
 ──────────────────────────────────────────── */
-function ganttStatusInfo(status) {
-    if (status === 'done')                          return { cls: 'completed',   label: 'Completed' };
-    if (status === 'in_progress' || status === 'review') return { cls: 'in-progress', label: 'In Progress' };
-    return { cls: 'not-started', label: 'Not Started' };
-}
+var MONTH_PX     = 80;   // fixed px per month column
+var ganttState   = {};   // {rangeStart, pxPerDay}
+var ganttCache   = [];   // last API response tasks
+var collapsedMap = {};   // {taskId: bool}
 
-function addMonths(d, n) {
-    var r = new Date(d); r.setMonth(r.getMonth() + n); return r;
+function ganttStatusCls(status) {
+    if (status === 'done')                               return 'completed';
+    if (status === 'in_progress' || status === 'review') return 'in-progress';
+    return 'not-started';
 }
 function monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
-function monthEnd(d)   { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
 function fmtMonth(d)   {
-    return d.toLocaleString('default', { month: 'short' }) + ' ' + d.getFullYear();
+    return d.toLocaleString('default', { month: 'short' }) + " '" + String(d.getFullYear()).slice(2);
 }
 
 function renderGantt() {
     fetch('/planner/api/')
         .then(function(r) { return r.json(); })
-        .then(function(data) { buildGantt(data.tasks); });
+        .then(function(data) {
+            ganttCache = data.tasks;
+            buildGantt(data.tasks);
+        });
 }
 
 function buildGantt(tasks) {
-    var container = document.getElementById('gantt-content');
-    var today = new Date();
-    today.setHours(0,0,0,0);
+    var today = new Date(); today.setHours(0,0,0,0);
 
-    var tasksWithDates = tasks.filter(function(t) { return t.start_date && t.end_date; });
-    var tasksNoDates   = tasks.filter(function(t) { return !t.start_date || !t.end_date; });
+    // Collect all dates for range calculation
+    var allDates = [today];
+    tasks.forEach(function(t) {
+        if (t.start_date) allDates.push(new Date(t.start_date));
+        if (t.end_date)   allDates.push(new Date(t.end_date));
+        (t.subtasks || []).forEach(function(s) {
+            if (s.start_date) allDates.push(new Date(s.start_date));
+            if (s.end_date)   allDates.push(new Date(s.end_date));
+        });
+    });
 
-    // Determine date range
-    var rangeStart, rangeEnd;
-    if (tasksWithDates.length > 0) {
-        var allStarts = tasksWithDates.map(function(t) { return new Date(t.start_date); });
-        var allEnds   = tasksWithDates.map(function(t) { return new Date(t.end_date); });
-        rangeStart = monthStart(new Date(Math.min.apply(null, allStarts)));
-        rangeEnd   = monthEnd(new Date(Math.max.apply(null, allEnds)));
-    } else {
-        rangeStart = monthStart(today);
-        rangeEnd   = monthEnd(addMonths(today, 5));
-    }
+    var rangeStart = monthStart(new Date(Math.min.apply(null, allDates)));
+    var rangeEnd   = new Date(Math.max.apply(null, allDates));
+    rangeEnd = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth() + 1, 0); // month end
 
-    // Ensure today is in range
-    if (today < rangeStart) rangeStart = monthStart(today);
-    if (today > rangeEnd)   rangeEnd   = monthEnd(today);
+    // 1-month padding on each side
+    rangeStart.setMonth(rangeStart.getMonth() - 1);
+    rangeEnd.setMonth(rangeEnd.getMonth() + 1);
+    rangeEnd = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth() + 1, 0);
 
-    // Build month array
+    // Build months array
     var months = [];
     var cur = new Date(rangeStart);
-    while (cur <= rangeEnd) {
-        months.push(new Date(cur));
-        cur.setMonth(cur.getMonth() + 1);
+    while (cur <= rangeEnd) { months.push(new Date(cur)); cur.setMonth(cur.getMonth() + 1); }
+
+    var totalDays  = (rangeEnd - rangeStart) / 86400000 + 1;
+    var totalWidth = months.length * MONTH_PX;
+    var pxPerDay   = totalWidth / totalDays;
+
+    ganttState = { rangeStart: rangeStart, pxPerDay: pxPerDay };
+
+    function toPx(dateStr) {
+        var d = new Date(dateStr); d.setHours(0,0,0,0);
+        if (d < rangeStart) d = new Date(rangeStart);
+        if (d > rangeEnd)   d = new Date(rangeEnd);
+        return ((d - rangeStart) / 86400000) * pxPerDay;
+    }
+    function barW(s, e) {
+        var sd = new Date(s); sd.setHours(0,0,0,0);
+        var ed = new Date(e); ed.setHours(0,0,0,0);
+        if (sd < rangeStart) sd = new Date(rangeStart);
+        if (ed > rangeEnd)   ed = new Date(rangeEnd);
+        return Math.max(((ed - sd) / 86400000 + 1) * pxPerDay, 6);
     }
 
-    var totalDays = (rangeEnd - rangeStart) / 86400000 + 1;
-
-    // Build HTML — compute month col width so all cols fill 100%
-    var monthColPct = (100 / months.length).toFixed(4) + '%';
-    var html = '<table class="gantt-table" style="table-layout:fixed;width:100%;">';
-
-    // Colgroup for precise widths
-    html += '<colgroup><col style="width:220px;min-width:220px;">';
-    months.forEach(function() {
-        html += '<col style="width:' + monthColPct + ';">';
-    });
-    html += '</colgroup>';
-
-    // Header
-    html += '<thead class="gantt-thead"><tr>';
-    html += '<th class="gantt-label-col">Task</th>';
+    // Render month header
+    var hHtml = '';
     months.forEach(function(m) {
-        html += '<th class="gantt-month-col month-th">' + fmtMonth(m) + '</th>';
+        hHtml += '<div class="gantt-month-cell" style="width:' + MONTH_PX + 'px;">' + fmtMonth(m) + '</div>';
     });
-    html += '</tr></thead><tbody>';
+    var hi = document.getElementById('gantt-header-inner');
+    hi.innerHTML = hHtml;
+    hi.style.width = totalWidth + 'px';
 
-    // Helper: get left% and width% for a task's bar relative to the month's days
-    function barGeometry(startDate, endDate) {
-        var s = new Date(startDate); s.setHours(0,0,0,0);
-        var e = new Date(endDate);   e.setHours(0,0,0,0);
-        if (s < rangeStart) s = new Date(rangeStart);
-        if (e > rangeEnd)   e = new Date(rangeEnd);
-        var offsetDays = (s - rangeStart) / 86400000;
-        var spanDays   = (e - s) / 86400000 + 1;
-        return {
-            leftPct:  (offsetDays / totalDays) * 100,
-            widthPct: (spanDays  / totalDays) * 100
-        };
+    // Build task panel + timeline body in lockstep
+    var taskHtml = '';
+    var tlWrap   = '<div style="position:relative;min-width:' + totalWidth + 'px;">';
+
+    // Today vertical line
+    var todayPx = ((today - rangeStart) / 86400000) * pxPerDay;
+    if (today >= rangeStart && today <= rangeEnd) {
+        tlWrap += '<div class="gantt-today-line" style="left:' + todayPx.toFixed(1) + 'px;"></div>';
     }
 
-    // Today line position
-    var todayLeftPct = ((today - rangeStart) / 86400000 / totalDays) * 100;
-    var showToday = today >= rangeStart && today <= rangeEnd;
-
-    if (tasksWithDates.length === 0) {
-        html += '<tr><td colspan="' + (months.length + 1) + '">';
-        html += '<div class="gantt-empty"><div class="gantt-empty-icon">📅</div>';
-        html += 'No tasks have start and end dates yet.<br>Add tasks and set dates to see them here.</div>';
-        html += '</td></tr>';
+    if (tasks.length === 0) {
+        taskHtml = '<div class="gantt-empty"><div class="gantt-empty-icon">📅</div>No tasks yet. Add tasks and set dates to see them here.</div>';
     } else {
-        tasksWithDates.forEach(function(task) {
-            var si = ganttStatusInfo(task.status);
-            var geo = barGeometry(task.start_date, task.end_date);
+        tasks.forEach(function(task) {
+            var isParent  = task.subtasks && task.subtasks.length > 0;
+            var collapsed = !!collapsedMap[task.id];
+            var sCls      = ganttStatusCls(task.status);
 
-            html += '<tr class="gantt-row">';
-            // Label cell
-            html += '<td class="gantt-label-cell">';
-            html += '<div class="gantt-task-name">';
-            html += '<span class="gantt-priority-dot ' + task.priority + '"></span>';
-            html += '<span style="overflow:hidden;text-overflow:ellipsis;">' + escHtml(task.title) + '</span>';
-            html += '</div>';
-            html += '<span class="gantt-status-badge ' + si.cls + '">' + si.label + '</span>';
-            html += '</td>';
-
-            // Single spanning bar cell using relative positioning across all month columns
-            html += '<td colspan="' + months.length + '" style="padding:0;position:relative;">';
-            html += '<div class="gantt-cell-area" style="position:relative;">';
-            // Today line
-            if (showToday) {
-                html += '<div class="today-line" style="left:' + todayLeftPct.toFixed(2) + '%"></div>';
+            // ── Left panel: parent/task row
+            taskHtml += '<div class="gantt-task-row' + (isParent ? ' parent-row' : '') + '"'
+                      + ' data-id="' + task.id + '" onclick="openEditGantt(' + task.id + ')">';
+            if (isParent) {
+                taskHtml += '<button class="gantt-expand-btn" onclick="toggleCollapse(event,' + task.id + ')">'
+                          + (collapsed ? '+' : '&minus;') + '</button>';
+            } else {
+                taskHtml += '<span style="width:22px;flex-shrink:0;display:inline-block;"></span>';
             }
-            // Month grid lines (vertical)
-            var runningPct = 0;
-            months.forEach(function(m, i) {
-                var mDays = monthEnd(m).getDate();
-                var mPct = (mDays / totalDays) * 100;
-                if (i > 0) {
-                    html += '<div style="position:absolute;left:' + runningPct.toFixed(2) + '%;top:0;bottom:0;width:1px;background:#f3f2f1;z-index:1;"></div>';
+            taskHtml += '<div class="gantt-task-label' + (isParent ? ' parent-label' : '') + '">'
+                      + '<span class="gantt-priority-dot ' + task.priority + '"></span>'
+                      + '<span style="overflow:hidden;text-overflow:ellipsis;">' + escHtml(task.title) + '</span>'
+                      + '</div></div>';
+
+            // ── Right panel: task timeline row
+            tlWrap += '<div class="gantt-tl-row' + (isParent ? ' parent-tl-row' : '') + '"'
+                    + ' data-id="' + task.id + '" style="width:' + totalWidth + 'px;">';
+            months.forEach(function() { tlWrap += '<div class="gantt-grid-cell" style="width:' + MONTH_PX + 'px;"></div>'; });
+            if (task.start_date && task.end_date) {
+                var lx = toPx(task.start_date).toFixed(1);
+                var bw = barW(task.start_date, task.end_date).toFixed(1);
+                tlWrap += '<div class="gantt-bar ' + sCls + (isParent ? ' parent-bar' : '') + '"'
+                        + ' style="left:' + lx + 'px;width:' + bw + 'px;"'
+                        + ' title="' + escHtml(task.title) + ': ' + task.start_date + ' → ' + task.end_date + '"'
+                        + ' onclick="event.stopPropagation();openEditGantt(' + task.id + ')">'
+                        + (parseFloat(bw) > 50 ? escHtml(task.title) : '')
+                        + '</div>';
+            }
+            tlWrap += '</div>';
+
+            // ── Subtask rows
+            (task.subtasks || []).forEach(function(sub) {
+                var subCls    = ganttStatusCls(sub.status);
+                var hideStyle = collapsed ? 'display:none;' : '';
+
+                // Left panel subtask
+                taskHtml += '<div class="gantt-task-row subtask-row" data-parent="' + task.id + '"'
+                          + ' style="' + hideStyle + '" onclick="openEditGantt(' + sub.id + ')">'
+                          + '<span style="width:22px;flex-shrink:0;display:inline-block;"></span>'
+                          + '<div class="gantt-task-label subtask-label">'
+                          + '<span class="gantt-priority-dot ' + sub.priority + '"></span>'
+                          + '<span style="overflow:hidden;text-overflow:ellipsis;">' + escHtml(sub.title) + '</span>'
+                          + '</div></div>';
+
+                // Right panel subtask
+                tlWrap += '<div class="gantt-tl-row subtask-row" data-parent="' + task.id + '"'
+                        + ' style="width:' + totalWidth + 'px;' + hideStyle + '">';
+                months.forEach(function() { tlWrap += '<div class="gantt-grid-cell" style="width:' + MONTH_PX + 'px;"></div>'; });
+                if (sub.start_date && sub.end_date) {
+                    var slx = toPx(sub.start_date).toFixed(1);
+                    var sbw = barW(sub.start_date, sub.end_date).toFixed(1);
+                    tlWrap += '<div class="gantt-bar subtask-bar ' + subCls + '"'
+                            + ' style="left:' + slx + 'px;width:' + sbw + 'px;"'
+                            + ' title="' + escHtml(sub.title) + ': ' + sub.start_date + ' → ' + sub.end_date + '"'
+                            + ' onclick="event.stopPropagation();openEditGantt(' + sub.id + ')">'
+                            + (parseFloat(sbw) > 50 ? escHtml(sub.title) : '')
+                            + '</div>';
                 }
-                runningPct += mPct;
+                tlWrap += '</div>';
             });
-            // The bar
-            html += '<div class="gantt-bar ' + si.cls + '" '
-                  + 'style="left:' + geo.leftPct.toFixed(2) + '%;width:' + geo.widthPct.toFixed(2) + '%;" '
-                  + 'title="' + escHtml(task.title) + ': ' + task.start_date + ' → ' + task.end_date + '" '
-                  + 'onclick="openEdit(' + task.id + ',\'' + escJs(task.title) + '\',\'' + escJs(task.description||'') + '\',\'' + task.priority + '\',\'' + task.status + '\',\'' + (task.start_date||'') + '\',\'' + (task.end_date||'') + '\')">'
-                  + escHtml(task.title)
-                  + '</div>';
-            html += '</div></td>';
-            html += '</tr>';
         });
     }
 
-    // Undated tasks list
-    if (tasksNoDates.length > 0) {
-        html += '<tr><td colspan="' + (months.length + 1) + '" style="padding:10px 14px 4px;font-size:11px;font-weight:700;color:#a19f9d;text-transform:uppercase;letter-spacing:0.6px;border-top:2px solid #edebe9;">No dates set</td></tr>';
-        tasksNoDates.forEach(function(task) {
-            var si = ganttStatusInfo(task.status);
-            html += '<tr class="gantt-row" style="opacity:0.65;">';
-            html += '<td class="gantt-label-cell" colspan="' + (months.length + 1) + '" '
-                  + 'style="cursor:pointer;" '
-                  + 'onclick="openEdit(' + task.id + ',\'' + escJs(task.title) + '\',\'' + escJs(task.description||'') + '\',\'' + task.priority + '\',\'' + task.status + '\',\'\',\'\')">';
-            html += '<div class="gantt-task-name">';
-            html += '<span class="gantt-priority-dot ' + task.priority + '"></span>';
-            html += '<span>' + escHtml(task.title) + '</span>';
-            html += '<span class="gantt-status-badge ' + si.cls + '" style="margin-left:8px;">' + si.label + '</span>';
-            html += '<span style="margin-left:8px;font-size:11px;color:#a19f9d;">— click to add dates</span>';
-            html += '</div></td>';
-            html += '</tr>';
-        });
-    }
+    tlWrap += '</div>';
+    document.getElementById('gantt-task-body').innerHTML = taskHtml;
+    document.getElementById('gantt-body').innerHTML = tlWrap;
 
-    html += '</tbody></table>';
-    container.innerHTML = html;
+    // Synchronized scrolling: body drives header X and task panel Y
+    var body        = document.getElementById('gantt-body');
+    var taskBody    = document.getElementById('gantt-task-body');
+    var headerInner = document.getElementById('gantt-header-inner');
+    var syncing     = false;
+
+    body.addEventListener('scroll', function() {
+        headerInner.style.transform = 'translateX(-' + body.scrollLeft + 'px)';
+        if (!syncing) { syncing = true; taskBody.scrollTop = body.scrollTop; syncing = false; }
+    });
+    taskBody.addEventListener('scroll', function() {
+        if (!syncing) { syncing = true; body.scrollTop = taskBody.scrollTop; syncing = false; }
+    });
+
+    setTimeout(scrollToToday, 80);
+}
+
+function scrollToToday() {
+    var body = document.getElementById('gantt-body');
+    if (!body || !ganttState.pxPerDay) return;
+    var today = new Date(); today.setHours(0,0,0,0);
+    var todayPx = ((today - ganttState.rangeStart) / 86400000) * ganttState.pxPerDay;
+    body.scrollLeft = Math.max(0, todayPx - body.clientWidth / 2);
+}
+
+function toggleCollapse(e, parentId) {
+    e.stopPropagation();
+    collapsedMap[parentId] = !collapsedMap[parentId];
+    var collapsed = collapsedMap[parentId];
+    e.currentTarget.innerHTML = collapsed ? '+' : '&minus;';
+    document.querySelectorAll('#gantt-task-body [data-parent="' + parentId + '"]').forEach(function(el) {
+        el.style.display = collapsed ? 'none' : '';
+    });
+    document.querySelectorAll('#gantt-body [data-parent="' + parentId + '"]').forEach(function(el) {
+        el.style.display = collapsed ? 'none' : '';
+    });
+}
+
+function openEditGantt(id) {
+    var allTasks = [];
+    ganttCache.forEach(function(t) {
+        allTasks.push(t);
+        (t.subtasks || []).forEach(function(s) { allTasks.push(s); });
+    });
+    var task = allTasks.find(function(t) { return t.id === id; });
+    if (task) {
+        openEdit(task.id, task.title, task.description || '', task.priority, task.status,
+                 task.start_date || '', task.end_date || '');
+    }
 }
 
 function escHtml(s) {

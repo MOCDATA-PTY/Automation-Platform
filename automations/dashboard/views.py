@@ -1695,7 +1695,7 @@ def project_planner(request):
 
     columns = []
     for key, label in KANBAN_COLUMNS:
-        tasks = list(ProjectTask.objects.filter(status=key).values(
+        tasks = list(ProjectTask.objects.filter(status=key, parent=None).values(
             'id', 'title', 'description', 'priority', 'created_at', 'start_date', 'end_date'
         ))
         for t in tasks:
@@ -1718,14 +1718,25 @@ def project_planner(request):
 
 @login_required
 def planner_api(request):
-    """JSON API returning all tasks with date info for the Gantt chart."""
-    tasks = list(ProjectTask.objects.values(
-        'id', 'title', 'description', 'status', 'priority', 'start_date', 'end_date', 'created_at'
-    ))
-    for t in tasks:
-        t['start_date'] = t['start_date'].isoformat() if t['start_date'] else None
-        t['end_date'] = t['end_date'].isoformat() if t['end_date'] else None
-        t['created_at'] = t['created_at'].strftime('%b %d, %Y')
+    """JSON API returning top-level tasks with nested subtasks for the Gantt chart."""
+    def serialize(t):
+        return {
+            'id': t.id,
+            'title': t.title,
+            'description': t.description,
+            'status': t.status,
+            'priority': t.priority,
+            'start_date': t.start_date.isoformat() if t.start_date else None,
+            'end_date': t.end_date.isoformat() if t.end_date else None,
+        }
+
+    top_level = ProjectTask.objects.filter(parent=None).prefetch_related('subtasks')
+    tasks = []
+    for t in top_level:
+        td = serialize(t)
+        td['subtasks'] = [serialize(s) for s in t.subtasks.all()]
+        tasks.append(td)
+
     total = ProjectTask.objects.count()
     in_progress = ProjectTask.objects.filter(status='in_progress').count()
     done = ProjectTask.objects.filter(status='done').count()
