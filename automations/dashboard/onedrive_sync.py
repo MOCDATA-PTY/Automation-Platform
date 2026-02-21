@@ -447,7 +447,7 @@ def sync_turnover_data():
     # Always save last sync time (even if no new records) - using local system time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -849,7 +849,7 @@ def sync_ppg_data():
     # Save last sync time (using local system time)
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.PPG_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -1007,7 +1007,7 @@ def sync_dor_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.DOR_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -1180,7 +1180,7 @@ def sync_con_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.CON_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -1337,7 +1337,7 @@ def sync_atl_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.ATL_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -1489,7 +1489,7 @@ def sync_hnl_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.HNL_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -1649,7 +1649,7 @@ def sync_jfk_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.JFK_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -2029,7 +2029,7 @@ def sync_ccd_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.CCD_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -2188,7 +2188,7 @@ def sync_fax_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.FAX_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -2347,7 +2347,7 @@ def sync_imp_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.IMP_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -2506,7 +2506,7 @@ def sync_hou_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.HOU_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -2665,7 +2665,7 @@ def sync_ics_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.ICS_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -2824,7 +2824,7 @@ def sync_lax_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.LAX_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -2983,7 +2983,7 @@ def sync_lcl_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.LCL_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -3142,7 +3142,7 @@ def sync_ord_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
     with open(settings.ORD_LAST_SYNC_FILE, 'w') as f:
         json.dump(last_sync, f)
 
@@ -3273,7 +3273,7 @@ def sync_creditor_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    sync_data = {'last_sync': local_time.isoformat()}
+    sync_data = {'last_sync': local_time.isoformat(), 'had_data': grand_total > 0}
     with open(settings.CREDITOR_LAST_SYNC_FILE, 'w') as f:
         json.dump(sync_data, f)
 
@@ -3475,7 +3475,7 @@ def sync_condor_dor_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    sync_data = {'last_sync': local_time.isoformat()}
+    sync_data = {'last_sync': local_time.isoformat(), 'had_data': grand_total > 0}
     with open(settings.CONDOR_DOR_LAST_SYNC_FILE, 'w') as f:
         json.dump(sync_data, f)
 
