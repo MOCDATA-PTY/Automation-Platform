@@ -227,7 +227,7 @@
 
 /* Task rows (left panel) */
 .gantt-task-row {
-    height: 40px;
+    height: 48px;
     display: flex;
     align-items: center;
     padding: 0 8px 0 6px;
@@ -242,7 +242,7 @@
 
 /* Timeline rows (right panel) */
 .gantt-tl-row {
-    height: 40px;
+    height: 48px;
     position: relative;
     display: flex;
     align-items: center;
@@ -302,28 +302,28 @@
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    height: 22px;
-    border-radius: 4px;
+    height: 28px;
+    border-radius: 5px;
     cursor: pointer;
     z-index: 3;
     display: flex;
     align-items: center;
-    padding: 0 6px;
+    padding: 0 8px;
     white-space: nowrap;
     overflow: hidden;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     color: #fff;
     transition: opacity 0.15s, box-shadow 0.15s;
-    min-width: 6px;
+    min-width: 8px;
     box-sizing: border-box;
 }
 .gantt-bar:hover { opacity: 0.85; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
 .gantt-bar.not-started { background: #a19f9d; }
 .gantt-bar.in-progress { background: #054B70; }
 .gantt-bar.completed   { background: #107c10; }
-.gantt-bar.parent-bar  { height: 14px; border-radius: 2px; opacity: 0.9; }
-.gantt-bar.subtask-bar { height: 18px; }
+.gantt-bar.parent-bar  { height: 18px; border-radius: 3px; opacity: 0.9; }
+.gantt-bar.subtask-bar { height: 24px; }
 
 /* Today line */
 .gantt-today-line {
@@ -721,7 +721,7 @@ document.addEventListener('keydown', function(e) {
 /* ────────────────────────────────────────────
    GANTT CHART
 ──────────────────────────────────────────── */
-var MONTH_PX     = 80;   // fixed px per month column
+var MONTH_PX     = 140;  // fixed px per month column
 var ganttState   = {};   // {rangeStart, pxPerDay}
 var ganttCache   = [];   // last API response tasks
 var collapsedMap = {};   // {taskId: bool}
@@ -845,7 +845,7 @@ function buildGantt(tasks) {
                         + ' style="left:' + lx + 'px;width:' + bw + 'px;"'
                         + ' title="' + escHtml(task.title) + ': ' + task.start_date + ' → ' + task.end_date + '"'
                         + ' onclick="event.stopPropagation();openEditGantt(' + task.id + ')">'
-                        + (parseFloat(bw) > 50 ? escHtml(task.title) : '')
+                        + (parseFloat(bw) > 30 ? escHtml(task.title) : '')
                         + '</div>';
             }
             tlWrap += '</div>';
