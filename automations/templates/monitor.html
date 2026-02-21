@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load humanize %}
 
 {% block title %}Sync Monitor - MOC Automations{% endblock %}
 
@@ -287,8 +288,8 @@
                     </span>
                 </td>
                 <td>
-                    {% if station.records %}
-                        {{ station.records }}
+                    {% if station.records is not None %}
+                        {{ station.records|intcomma }}
                     {% else %}
                         --
                     {% endif %}
@@ -334,7 +335,7 @@ setInterval(function() {
                 html += '<span class="status-label ' + s.status + '">' + statusLabel + '</span></td>';
                 html += '<td>' + syncDisplay + '</td>';
                 html += '<td><span class="time-ago ' + timeAgoClass + '">' + (s.time_ago || '--') + '</span></td>';
-                html += '<td>' + (s.records || '--') + '</td>';
+                html += '<td>' + (s.records !== null && s.records !== undefined ? Number(s.records).toLocaleString() : '--') + '</td>';
                 html += '<td><span class="error-msg ' + errorClass + '" title="' + (s.message || '') + '">' + (s.message || '--') + '</span></td>';
                 html += '</tr>';
             });

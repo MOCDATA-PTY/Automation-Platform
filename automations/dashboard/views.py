@@ -1469,6 +1469,17 @@ STATIONS = [
     'lcl', 'ord', 'ppg',
 ]
 
+STATION_TABLES = {
+    'turnover': 'turnover_data',
+    'creditor': 'creditor_transactions',
+    'condor_dor': 'condor_dor_pnl',
+    'atl': 'atl_pnl', 'ccc': 'ccc_pnl', 'ccd': 'ccd_pnl',
+    'con': 'con_pnl', 'dor': 'dor_pnl', 'fax': 'fax_pnl',
+    'hnl': 'hnl_pnl', 'hou': 'hou_pnl', 'ics': 'ics_pnl',
+    'imp': 'imp_pnl', 'jfk': 'jfk_pnl', 'lax': 'lax_pnl',
+    'lcl': 'lcl_pnl', 'ord': 'ord_pnl', 'ppg': 'ppg_pnl',
+}
+
 
 def _get_station_statuses():
     """Build station status list for the monitor page."""
@@ -1513,7 +1524,17 @@ def _get_station_statuses():
         health = health_data.get(station, {})
         health_status = health.get('status', 'unknown')
         health_message = health.get('message', '')
-        records = health.get('records', 0)
+
+        # Query actual record count from DB
+        records = None
+        table = STATION_TABLES.get(station)
+        if table:
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                    records = cursor.fetchone()[0]
+            except Exception:
+                records = None
 
         # Determine overall status
         if health_status == 'error':
