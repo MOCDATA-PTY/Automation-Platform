@@ -20,116 +20,158 @@
             display: flex;
         }
 
-        /* Sidebar - Microsoft Style */
+        /* Sidebar */
         .sidebar {
-            width: 48px;
+            width: 52px;
             background: #054B70;
             min-height: 100vh;
             position: fixed;
             left: 0;
             top: 0;
-            transition: width 0.2s ease;
+            transition: width 0.25s ease;
             z-index: 100;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
+            box-shadow: 2px 0 12px rgba(0,0,0,0.15);
         }
 
         .sidebar:hover {
-            width: 220px;
+            width: 224px;
         }
 
+        /* Decorative circles — matches login left panel */
+        .sidebar::before {
+            content: '';
+            position: absolute;
+            top: -80px;
+            right: -60px;
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            background: rgba(148, 188, 204, 0.12);
+            pointer-events: none;
+        }
+
+        .sidebar::after {
+            content: '';
+            position: absolute;
+            bottom: -60px;
+            left: -40px;
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: rgba(148, 188, 204, 0.08);
+            pointer-events: none;
+        }
+
+        /* Header */
         .sidebar-header {
-            padding: 16px 12px;
+            display: flex;
+            align-items: center;
+            padding: 14px 10px;
             border-bottom: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+            z-index: 1;
+            flex-shrink: 0;
         }
 
         .sidebar-logo {
-            width: 24px;
-            height: 24px;
-            background: #94BCCC;
-            border-radius: 4px;
+            width: 32px;
+            height: 32px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.12);
+            backdrop-filter: blur(4px);
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
+            transition: background 0.2s ease;
+        }
+
+        .sidebar:hover .sidebar-logo {
+            background: rgba(255,255,255,0.2);
         }
 
         .sidebar-logo svg {
             width: 16px;
             height: 16px;
-            fill: #054B70;
+            fill: #fff;
         }
 
-        .sidebar-brand {
-            color: #fff;
-            font-size: 14px;
-            font-weight: 600;
+        .sidebar-brand-wrap {
             margin-left: 12px;
             white-space: nowrap;
             opacity: 0;
             transition: opacity 0.2s ease;
         }
 
-        .sidebar:hover .sidebar-brand {
+        .sidebar:hover .sidebar-brand-wrap {
             opacity: 1;
         }
 
-        .sidebar-header {
-            display: flex;
-            align-items: center;
+        .sidebar-brand-name {
+            font-size: 10px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.55);
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
         }
 
+        .sidebar-brand-sub {
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            margin-top: 1px;
+        }
+
+        /* Nav menu */
         .sidebar-menu {
             list-style: none;
-            padding: 8px 0;
+            padding: 10px 0;
             flex: 1;
             overflow-y: auto;
             overflow-x: hidden;
+            position: relative;
+            z-index: 1;
         }
 
-        .sidebar-menu::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .sidebar-menu::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .sidebar-menu::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.2);
-            border-radius: 3px;
-        }
-
-        .sidebar-menu::-webkit-scrollbar-thumb:hover {
-            background: rgba(255,255,255,0.3);
-        }
+        .sidebar-menu::-webkit-scrollbar { width: 4px; }
+        .sidebar-menu::-webkit-scrollbar-track { background: transparent; }
+        .sidebar-menu::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 2px; }
 
         .sidebar-menu li {
-            margin: 2px 4px;
+            margin: 2px 6px;
         }
 
         .sidebar-menu a {
             display: flex;
             align-items: center;
-            padding: 10px 12px;
-            color: rgba(255,255,255,0.85);
+            padding: 10px 7px;
+            color: rgba(255,255,255,0.75);
             text-decoration: none;
             font-size: 13px;
-            border-radius: 4px;
-            transition: background 0.1s ease;
+            border-radius: 6px;
+            transition: background 0.15s ease, color 0.15s ease;
+            white-space: nowrap;
         }
 
         .sidebar-menu a:hover {
             background: rgba(255,255,255,0.1);
-        }
-
-        .sidebar-menu a.active {
-            background: rgba(148, 188, 204, 0.3);
             color: #fff;
         }
 
+        .sidebar-menu a.active {
+            background: rgba(148, 188, 204, 0.22);
+            color: #fff;
+            border-left: 2px solid #94BCCC;
+            padding-left: 5px;
+        }
+
         .sidebar-menu .icon {
-            width: 24px;
-            height: 24px;
+            width: 26px;
+            height: 26px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -143,7 +185,7 @@
         }
 
         .sidebar-menu .label {
-            margin-left: 12px;
+            margin-left: 10px;
             white-space: nowrap;
             opacity: 0;
             transition: opacity 0.2s ease;
@@ -153,13 +195,64 @@
             opacity: 1;
         }
 
+        /* Footer / sign-out */
+        .sidebar-footer {
+            padding: 8px 6px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+            z-index: 1;
+            flex-shrink: 0;
+        }
+
+        .sidebar-footer a {
+            display: flex;
+            align-items: center;
+            padding: 10px 7px;
+            color: rgba(255,255,255,0.65);
+            text-decoration: none;
+            font-size: 13px;
+            border-radius: 6px;
+            transition: background 0.15s ease, color 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .sidebar-footer a:hover {
+            background: rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.9);
+        }
+
+        .sidebar-footer .icon {
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .sidebar-footer .icon svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+
+        .sidebar-footer .label {
+            margin-left: 10px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar:hover .sidebar-footer .label {
+            opacity: 1;
+        }
+
         /* Main Content */
         .main-content {
-            margin-left: 48px;
+            margin-left: 52px;
             flex: 1;
             padding: 24px 32px;
             min-height: 100vh;
-            transition: margin-left 0.2s ease;
         }
 
         .page-header {
@@ -189,7 +282,10 @@
             <div class="sidebar-logo">
                 <svg viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>
             </div>
-            <span class="sidebar-brand">MOC Automations</span>
+            <div class="sidebar-brand-wrap">
+                <div class="sidebar-brand-name">MOC</div>
+                <div class="sidebar-brand-sub">Automations</div>
+            </div>
         </div>
 
         <ul class="sidebar-menu">
@@ -210,10 +306,11 @@
                 </a>
             </li>
         </ul>
-        <div style="padding: 8px 4px; border-top: 1px solid rgba(255,255,255,0.1);">
-            <a href="{% url 'logout' %}" class="sidebar-menu a" style="display: flex; align-items: center; padding: 10px 12px; color: rgba(255,255,255,0.85); text-decoration: none; font-size: 13px; border-radius: 4px;">
-                <span class="icon" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                    <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: currentColor;"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+
+        <div class="sidebar-footer">
+            <a href="{% url 'logout' %}">
+                <span class="icon">
+                    <svg viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
                 </span>
                 <span class="label">Sign out</span>
             </a>
