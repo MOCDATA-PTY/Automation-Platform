@@ -1523,7 +1523,9 @@ def _get_station_statuses():
                         'time': last_sync_dt.strftime('%H:%M'),
                         'date': last_sync_dt.strftime('%b %d, %Y'),
                     }
-                    synced_data = True
+                    # had_data=True means actual records were processed;
+                    # False means the job ran but found no file to import
+                    synced_data = data.get('had_data', True)
             except Exception:
                 pass
 

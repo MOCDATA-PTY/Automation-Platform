@@ -1724,7 +1724,7 @@ def sync_ccc_data():
         from zoneinfo import ZoneInfo
         local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
         with open(settings.CCC_LAST_SYNC_FILE, 'w') as f:
-            json.dump({'last_sync': local_time.isoformat()}, f)
+            json.dump({'last_sync': local_time.isoformat(), 'had_data': False}, f)
         return 0
 
     print(f"\nFound {len(excel_files)} Excel file(s) with '2026' in name:")
@@ -1760,7 +1760,7 @@ def sync_ccc_data():
         from zoneinfo import ZoneInfo
         local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
         with open(settings.CCC_LAST_SYNC_FILE, 'w') as f:
-            json.dump({'last_sync': local_time.isoformat()}, f)
+            json.dump({'last_sync': local_time.isoformat(), 'had_data': False}, f)
         return 0
 
     print(f"\nTotal rows from all files: {len(all_rows)}")
@@ -1870,9 +1870,8 @@ def sync_ccc_data():
     # Save last sync time
     from zoneinfo import ZoneInfo
     local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
-    last_sync = {'last_sync': local_time.isoformat()}
     with open(settings.CCC_LAST_SYNC_FILE, 'w') as f:
-        json.dump(last_sync, f)
+        json.dump({'last_sync': local_time.isoformat(), 'had_data': True}, f)
 
     return len(all_rows)
 
