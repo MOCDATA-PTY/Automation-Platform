@@ -846,26 +846,46 @@ function fmtMonth(d) {
 function stripPrefix(title) { return String(title).replace(/^\[[^\]]+\]\s*/, ''); }
 
 function renderGantt() {
+    console.log('[Gantt] renderGantt() called — fetching /planner/api/');
     fetch('/planner/api/')
-        .then(function(r) { return r.json(); })
+        .then(function(r) {
+            console.log('[Gantt] API response status:', r.status, r.statusText);
+            return r.json();
+        })
         .then(function(data) {
+            console.log('[Gantt] Raw API data:', data);
+            console.log('[Gantt] Projects count:', (data.projects || []).length);
             ganttCache = data.projects || [];
             buildGantt(ganttCache);
+        })
+        .catch(function(err) {
+            console.error('[Gantt] API fetch error:', err);
         });
 }
 
 function buildGantt(projects) {
+    console.log('[Gantt] buildGantt() called with', projects.length, 'project(s)');
+    console.log('[Gantt] Full projects payload:', JSON.parse(JSON.stringify(projects)));
+
     var today = new Date(); today.setHours(0,0,0,0);
+    console.log('[Gantt] Today:', today.toISOString().slice(0,10));
 
     // Collect all dates for range
     var allDates = [today];
     projects.forEach(function(p) {
+        console.log('[Gantt] Project "' + p.name + '" — start:', p.start_date, 'end:', p.end_date,
+                    '| tasks:', (p.tasks||[]).length, '| status:', p.status);
         if (p.start_date) allDates.push(new Date(p.start_date + 'T00:00:00'));
         if (p.end_date)   allDates.push(new Date(p.end_date   + 'T00:00:00'));
         (p.tasks || []).forEach(function(t) {
+            console.log('  [Gantt]   Task #' + t.id + ' "' + t.title + '" — start:', t.start_date,
+                        'end:', t.end_date, '| status:', t.status, '| priority:', t.priority,
+                        '| subtasks:', (t.subtasks||[]).length);
             if (t.start_date) allDates.push(new Date(t.start_date + 'T00:00:00'));
             if (t.end_date)   allDates.push(new Date(t.end_date   + 'T00:00:00'));
             (t.subtasks || []).forEach(function(s) {
+                console.log('    [Gantt]     Subtask #' + s.id + ' "' + s.title + '" — start:', s.start_date,
+                            'end:', s.end_date, '| status:', s.status, '| priority:', s.priority);
                 if (s.start_date) allDates.push(new Date(s.start_date + 'T00:00:00'));
                 if (s.end_date)   allDates.push(new Date(s.end_date   + 'T00:00:00'));
             });
@@ -887,19 +907,24 @@ function buildGantt(projects) {
     var totalWidth = months.length * MONTH_PX;
     var pxPerDay   = totalWidth / totalDays;
 
+    console.log('[Gantt] Date range:', rangeStart.toISOString().slice(0,10), '→', rangeEnd.toISOString().slice(0,10));
+    console.log('[Gantt] Months:', months.length, '| totalWidth:', totalWidth + 'px', '| pxPerDay:', pxPerDay.toFixed(2));
+
     ganttState = { rangeStart: rangeStart, pxPerDay: pxPerDay };
 
     function toPx(dateStr) {
         var d = new Date(dateStr + 'T00:00:00');
-        if (d < rangeStart) d = new Date(rangeStart);
-        if (d > rangeEnd)   d = new Date(rangeEnd);
+        if (d < rangeStart) { console.warn('[Gantt] toPx: date', dateStr, 'is before rangeStart — clamping'); d = new Date(rangeStart); }
+        if (d > rangeEnd)   { console.warn('[Gantt] toPx: date', dateStr, 'is after rangeEnd — clamping');   d = new Date(rangeEnd);   }
         return ((d - rangeStart) / 86400000) * pxPerDay;
     }
     function barW(s, e) {
         var sd = new Date(s + 'T00:00:00'), ed = new Date(e + 'T00:00:00');
         if (sd < rangeStart) sd = new Date(rangeStart);
         if (ed > rangeEnd)   ed = new Date(rangeEnd);
-        return Math.max(((ed - sd) / 86400000 + 1) * pxPerDay, 6);
+        var w = Math.max(((ed - sd) / 86400000 + 1) * pxPerDay, 6);
+        if (w <= 6) console.warn('[Gantt] barW: very narrow bar (', w.toFixed(1), 'px) for', s, '→', e);
+        return w;
     }
     function gridCells() {
         var h = '';
@@ -921,25 +946,36 @@ function buildGantt(projects) {
 
     // Today line
     var todayPx = ((today - rangeStart) / 86400000) * pxPerDay;
+    console.log('[Gantt] Today line at:', todayPx.toFixed(1) + 'px');
     if (today >= rangeStart && today <= rangeEnd) {
         tlWrap += '<div class="gantt-today-line" style="left:' + todayPx.toFixed(1) + 'px;"></div>';
+    } else {
+        console.warn('[Gantt] Today is outside the date range — today line not shown');
     }
 
     if (!projects || projects.length === 0) {
+        console.warn('[Gantt] No projects to render — showing empty state');
         taskHtml = '<div class="gantt-empty"><div class="gantt-empty-icon">📅</div>No projects yet. Add tasks with dates to see them here.</div>';
     } else {
         projects.forEach(function(proj, projIdx) {
             var projCollapsed = !!collapsedMap['proj_' + projIdx];
             var projStatusCls = ganttStatusCls(proj.status);
-
-            // ── Level-0: Project row (left panel)
             var projPct      = calcProgress(proj);
             var projBadgeCls = statusBadgeCls(proj.status || 'todo');
             var projBadgeLbl = statusLabelText(proj.status || 'todo');
             var projFillCls  = progressFillCls(projPct);
+
+            console.log('[Gantt] Rendering project [' + projIdx + '] "' + proj.name + '"',
+                        '| progress:', projPct + '%', '| badge:', projBadgeLbl,
+                        '| collapsed:', projCollapsed);
+
             var projDates    = (proj.start_date && proj.end_date)
                 ? '&#128197; ' + proj.start_date.slice(0,7).replace('-','/') + ' &#8211; ' + proj.end_date.slice(0,7).replace('-','/')
                 : '';
+            if (!proj.start_date || !proj.end_date) {
+                console.warn('[Gantt] Project "' + proj.name + '" missing start_date or end_date — no summary bar');
+            }
+
             taskHtml += '<div class="gantt-task-row level-0">';
             taskHtml += '<button class="gantt-expand-btn" style="align-self:flex-start;margin-top:6px;" onclick="toggleProject(event,' + projIdx + ')">'
                       + (projCollapsed ? '+' : '&minus;') + '</button>';
@@ -962,6 +998,7 @@ function buildGantt(projects) {
             if (proj.start_date && proj.end_date) {
                 var plx = toPx(proj.start_date).toFixed(1);
                 var pbw = barW(proj.start_date, proj.end_date).toFixed(1);
+                console.log('[Gantt]   Project bar: left=' + plx + 'px, width=' + pbw + 'px');
                 tlWrap += '<div class="gantt-bar summary-bar ' + projStatusCls + '"'
                         + ' style="left:' + plx + 'px;width:' + pbw + 'px;"'
                         + ' title="' + escHtml(proj.name) + ': ' + proj.start_date + ' → ' + proj.end_date + '">'
@@ -976,6 +1013,14 @@ function buildGantt(projects) {
                 var taskCollapsed = !!collapsedMap['task_' + task.id];
                 var taskStatusCls = ganttStatusCls(task.status);
                 var hideTask = projCollapsed ? 'display:none;' : '';
+
+                console.log('[Gantt]   Task #' + task.id + ' "' + stripPrefix(task.title) + '"',
+                            '| start:', task.start_date, 'end:', task.end_date,
+                            '| hasSubtasks:', hasSubtasks, '| hidden:', !!projCollapsed);
+
+                if (!task.start_date || !task.end_date) {
+                    console.warn('[Gantt]   Task #' + task.id + ' "' + task.title + '" has NO dates — bar will be skipped');
+                }
 
                 // Level-1 left panel
                 taskHtml += '<div class="gantt-task-row level-1" data-level="1" data-proj="' + projIdx + '"'
@@ -1001,6 +1046,7 @@ function buildGantt(projects) {
                 if (task.start_date && task.end_date) {
                     var tlx = toPx(task.start_date).toFixed(1);
                     var tbw = barW(task.start_date, task.end_date).toFixed(1);
+                    console.log('[Gantt]   Task bar: left=' + tlx + 'px, width=' + tbw + 'px');
                     tlWrap += '<div class="gantt-bar task-bar ' + taskStatusCls + '"'
                             + ' style="left:' + tlx + 'px;width:' + tbw + 'px;"'
                             + ' title="' + escHtml(task.title) + ': ' + task.start_date + ' → ' + task.end_date + '"'
@@ -1014,6 +1060,14 @@ function buildGantt(projects) {
                 (task.subtasks || []).forEach(function(sub) {
                     var subStatusCls = ganttStatusCls(sub.status);
                     var hideSub = (projCollapsed || taskCollapsed) ? 'display:none;' : '';
+
+                    console.log('[Gantt]     Subtask #' + sub.id + ' "' + sub.title + '"',
+                                '| start:', sub.start_date, 'end:', sub.end_date,
+                                '| status:', sub.status, '| hidden:', !!(projCollapsed || taskCollapsed));
+
+                    if (!sub.start_date || !sub.end_date) {
+                        console.warn('[Gantt]     Subtask #' + sub.id + ' "' + sub.title + '" has NO dates — bar will be skipped');
+                    }
 
                     // Level-2 left panel
                     var subBadgeCls = statusBadgeCls(sub.status);
@@ -1036,6 +1090,8 @@ function buildGantt(projects) {
                     if (sub.start_date && sub.end_date) {
                         var slx = toPx(sub.start_date).toFixed(1);
                         var sbw = barW(sub.start_date, sub.end_date).toFixed(1);
+                        console.log('[Gantt]     Subtask bar: left=' + slx + 'px, width=' + sbw + 'px',
+                                    '| show label:', parseFloat(sbw) > 50);
                         tlWrap += '<div class="gantt-bar subtask-bar ' + subStatusCls + '"'
                                 + ' style="left:' + slx + 'px;width:' + sbw + 'px;"'
                                 + ' title="' + escHtml(sub.title) + ': ' + sub.start_date + ' → ' + sub.end_date + '"'
@@ -1052,6 +1108,8 @@ function buildGantt(projects) {
     tlWrap += '</div>';
     document.getElementById('gantt-task-body').innerHTML = taskHtml;
     document.getElementById('gantt-body').innerHTML = tlWrap;
+    console.log('[Gantt] DOM written — task rows in left panel:', document.getElementById('gantt-task-body').children.length);
+    console.log('[Gantt] DOM written — tl rows in right panel (inside wrapper):', document.getElementById('gantt-body').querySelectorAll('.gantt-tl-row').length);
 
     // Synchronized scrolling
     var body        = document.getElementById('gantt-body');
@@ -1067,6 +1125,7 @@ function buildGantt(projects) {
         if (!syncing) { syncing = true; body.scrollTop = taskBody.scrollTop; syncing = false; }
     });
 
+    console.log('[Gantt] Build complete. scrollToToday scheduled in 80ms.');
     setTimeout(scrollToToday, 80);
 }
 
