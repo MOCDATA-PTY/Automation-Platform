@@ -990,7 +990,7 @@ function buildGantt(projects) {
                 var taskBadgeLbl = statusLabelText(task.status);
                 taskHtml += '<div class="gantt-task-label level-1-label">'
                           + '<span class="gantt-priority-dot ' + task.priority + '"></span>'
-                          + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;">' + escHtml(stripPrefix(task.title)) + '</span>'
+                          + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(stripPrefix(task.title)) + '</span>'
                           + '<span class="gantt-status-badge ' + taskBadgeCls + '" style="margin-left:4px;">' + taskBadgeLbl + '</span>'
                           + '</div></div>';
 
@@ -1024,7 +1024,7 @@ function buildGantt(projects) {
                               + '<span style="width:22px;flex-shrink:0;display:inline-block;"></span>'
                               + '<div class="gantt-task-label level-2-label">'
                               + '<span class="gantt-priority-dot ' + sub.priority + '"></span>'
-                              + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;">' + escHtml(sub.title) + '</span>'
+                              + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(sub.title) + '</span>'
                               + '<span class="gantt-status-badge ' + subBadgeCls + '" style="margin-left:4px;">' + subBadgeLbl + '</span>'
                               + '</div></div>';
 
