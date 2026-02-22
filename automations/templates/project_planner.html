@@ -382,15 +382,15 @@
 .gantt-tl-row.level-0-row:hover { background:#14213d; }
 
 /* Level-1: Task row */
-.gantt-task-row.level-1 { background:#1e293b; height:52px; }
+.gantt-task-row.level-1 { background:#1e293b; min-height:52px; height:auto; }
 .gantt-task-row.level-1:hover { background:#243449; }
-.gantt-tl-row.level-1-row { background:#1e293b; height:52px; }
+.gantt-tl-row.level-1-row { background:#1e293b; min-height:52px; height:auto; }
 .gantt-tl-row.level-1-row:hover { background:#243449; }
 
 /* Level-2: Subtask row */
-.gantt-task-row.level-2 { background:#162032; height:40px; }
+.gantt-task-row.level-2 { background:#162032; min-height:40px; height:auto; }
 .gantt-task-row.level-2:hover { background:#1c2a3e; }
-.gantt-tl-row.level-2-row { background:#162032; height:40px; }
+.gantt-tl-row.level-2-row { background:#162032; min-height:40px; height:auto; }
 .gantt-tl-row.level-2-row:hover { background:#1c2a3e; }
 
 /* Label variants */
@@ -405,8 +405,8 @@
     overflow: visible;
     padding: 6px 0;
 }
-.gantt-task-label.level-1-label { padding-left:4px; font-weight:500; color:#cbd5e1; font-size:12px; justify-content:space-between; }
-.gantt-task-label.level-2-label { font-size:11px; color:#94a3b8; padding-left:18px; justify-content:space-between; }
+.gantt-task-label.level-1-label { padding-left:4px; font-weight:500; color:#cbd5e1; font-size:12px; justify-content:space-between; flex-wrap:wrap; white-space:normal; overflow:visible; align-items:flex-start; padding-top:4px; padding-bottom:4px; }
+.gantt-task-label.level-2-label { font-size:11px; color:#94a3b8; padding-left:18px; justify-content:space-between; flex-wrap:wrap; white-space:normal; overflow:visible; align-items:flex-start; padding-top:3px; padding-bottom:3px; }
 
 /* Project name row inside level-0 label */
 .gantt-proj-name-row { display:flex; align-items:center; gap:6px; width:100%; }
@@ -990,7 +990,7 @@ function buildGantt(projects) {
                 var taskBadgeLbl = statusLabelText(task.status);
                 taskHtml += '<div class="gantt-task-label level-1-label">'
                           + '<span class="gantt-priority-dot ' + task.priority + '"></span>'
-                          + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(stripPrefix(task.title)) + '</span>'
+                          + '<span style="flex:1;min-width:0;word-break:break-word;">' + escHtml(stripPrefix(task.title)) + '</span>'
                           + '<span class="gantt-status-badge ' + taskBadgeCls + '" style="margin-left:4px;">' + taskBadgeLbl + '</span>'
                           + '</div></div>';
 
@@ -1024,7 +1024,7 @@ function buildGantt(projects) {
                               + '<span style="width:22px;flex-shrink:0;display:inline-block;"></span>'
                               + '<div class="gantt-task-label level-2-label">'
                               + '<span class="gantt-priority-dot ' + sub.priority + '"></span>'
-                              + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(sub.title) + '</span>'
+                              + '<span style="flex:1;min-width:0;word-break:break-word;">' + escHtml(sub.title) + '</span>'
                               + '<span class="gantt-status-badge ' + subBadgeCls + '" style="margin-left:4px;">' + subBadgeLbl + '</span>'
                               + '</div></div>';
 
