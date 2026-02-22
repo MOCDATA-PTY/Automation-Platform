@@ -1127,6 +1127,31 @@ function buildGantt(projects) {
 
     console.log('[Gantt] Build complete. scrollToToday scheduled in 80ms.');
     setTimeout(scrollToToday, 80);
+
+    // After paint: log actual rendered row heights and sync mismatches
+    setTimeout(function() {
+        var leftRows  = Array.from(document.getElementById('gantt-task-body').children);
+        var rightRows = Array.from(document.getElementById('gantt-body').querySelectorAll('.gantt-tl-row'));
+        console.log('[Gantt][Heights] Left rows:', leftRows.length, '| Right rows:', rightRows.length);
+        var mismatch = 0;
+        leftRows.forEach(function(lRow, i) {
+            var rRow = rightRows[i];
+            if (!rRow) { console.warn('[Gantt][Heights] Row', i, '— no matching right-panel row!'); return; }
+            var lh = lRow.getBoundingClientRect().height;
+            var rh = rRow.getBoundingClientRect().height;
+            var cls = lRow.className;
+            if (Math.abs(lh - rh) > 1) {
+                mismatch++;
+                console.warn('[Gantt][Heights] ROW', i, 'MISMATCH — left:', lh.toFixed(1) + 'px, right:', rh.toFixed(1) + 'px | class:', cls);
+                // Fix: force right row to match left
+                rRow.style.height = lh + 'px';
+                rRow.style.minHeight = lh + 'px';
+            } else {
+                console.log('[Gantt][Heights] Row', i, 'OK — left:', lh.toFixed(1) + 'px, right:', rh.toFixed(1) + 'px | class:', cls);
+            }
+        });
+        console.log('[Gantt][Heights] Done. Mismatches fixed:', mismatch);
+    }, 150);
 }
 
 function scrollToToday() {
