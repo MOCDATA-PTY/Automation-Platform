@@ -172,8 +172,8 @@
 
 /* Left: task name panel */
 .gantt-task-panel {
-    width: 390px;
-    min-width: 390px;
+    width: 520px;
+    min-width: 520px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
@@ -949,7 +949,7 @@ function buildGantt(projects) {
                       +   '<span class="gantt-status-badge ' + projBadgeCls + '">' + projBadgeLbl + '</span>'
                       + '</div>'
                       + (projDates ? '<div class="gantt-proj-meta"><span>' + projDates + '</span></div>' : '')
-                      + '<div class="gantt-progress-wrap" style="width:100%;max-width:320px;">'
+                      + '<div class="gantt-progress-wrap" style="width:100%;max-width:450px;">'
                       +   '<div class="gantt-progress-track"><div class="gantt-progress-fill ' + projFillCls + '" style="width:' + projPct + '%;"></div></div>'
                       +   '<span class="gantt-progress-pct">' + projPct + '%</span>'
                       + '</div>'
