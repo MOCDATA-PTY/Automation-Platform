@@ -194,6 +194,7 @@
     letter-spacing: 0.6px;
     flex-shrink: 0;
     border-bottom: 1px solid #334155;
+    gap: 8px;
 }
 .gantt-task-body { flex:1; overflow-y:auto; overflow-x:hidden; background:#1e293b; }
 .gantt-task-body::-webkit-scrollbar { width:6px; }
@@ -523,19 +524,13 @@
 
 <!-- ── Gantt view ── -->
 <div id="view-gantt" style="display:none;">
-    <div class="gantt-toolbar">
-        <div class="gantt-legend">
-            <div class="legend-item"><div class="legend-dot not-started"></div> Not Started</div>
-            <div class="legend-item"><div class="legend-dot in-progress"></div> In Progress</div>
-            <div class="legend-item"><div class="legend-dot completed"></div> Completed</div>
-            <div class="legend-item"><div class="legend-dot today"></div> Today</div>
-        </div>
-        <button class="btn-goto-today" onclick="scrollToToday()">&#8594; Go to Today</button>
-    </div>
     <div class="gantt-container">
         <!-- Left: task names -->
         <div class="gantt-task-panel">
-            <div class="gantt-task-header">Task</div>
+            <div class="gantt-task-header">
+                <span>Task</span>
+                <button class="btn-goto-today" onclick="scrollToToday()" style="margin-left:auto;">&#8594; Today</button>
+            </div>
             <div class="gantt-task-body" id="gantt-task-body"></div>
         </div>
         <!-- Right: timeline -->
@@ -545,6 +540,12 @@
             </div>
             <div class="gantt-body" id="gantt-body"></div>
         </div>
+    </div>
+    <div class="gantt-legend" style="margin-top:8px;">
+        <div class="legend-item"><div class="legend-dot not-started"></div> Not Started</div>
+        <div class="legend-item"><div class="legend-dot in-progress"></div> In Progress</div>
+        <div class="legend-item"><div class="legend-dot completed"></div> Completed</div>
+        <div class="legend-item"><div class="legend-dot today"></div> Today</div>
     </div>
 </div>
 
