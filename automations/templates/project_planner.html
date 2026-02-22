@@ -1061,13 +1061,17 @@ function buildGantt(projects) {
                     var tlx = toPx(task.start_date).toFixed(1);
                     var tbw = barW(task.start_date, task.end_date).toFixed(1);
                     console.log('[Gantt]   Task bar: left=' + tlx + 'px, width=' + tbw + 'px');
+                    var tWide = parseFloat(tbw) >= 80;
                     tlWrap += '<div class="gantt-bar task-bar ' + taskStatusCls + '"'
                             + ' style="left:' + tlx + 'px;width:' + tbw + 'px;"'
                             + ' title="' + escHtml(task.title) + ': ' + task.start_date + ' → ' + task.end_date + '"'
                             + ' onclick="event.stopPropagation();openEditGantt(' + task.id + ')">'
+                            + (tWide ? escHtml(stripPrefix(task.title)) : '')
                             + '</div>';
-                    tlWrap += '<div class="gantt-bar-label-out" style="left:' + (parseFloat(tlx) + parseFloat(tbw) + 4) + 'px;">'
-                            + escHtml(stripPrefix(task.title)) + '</div>';
+                    if (!tWide) {
+                        tlWrap += '<div class="gantt-bar-label-out" style="left:' + (parseFloat(tlx) + parseFloat(tbw) + 4) + 'px;">'
+                                + escHtml(stripPrefix(task.title)) + '</div>';
+                    }
                 }
                 tlWrap += '</div>';
 
@@ -1106,13 +1110,17 @@ function buildGantt(projects) {
                         var slx = toPx(sub.start_date).toFixed(1);
                         var sbw = barW(sub.start_date, sub.end_date).toFixed(1);
                         console.log('[Gantt]     Subtask bar: left=' + slx + 'px, width=' + sbw + 'px');
+                        var sWide = parseFloat(sbw) >= 80;
                         tlWrap += '<div class="gantt-bar subtask-bar ' + subStatusCls + '"'
                                 + ' style="left:' + slx + 'px;width:' + sbw + 'px;"'
                                 + ' title="' + escHtml(sub.title) + ': ' + sub.start_date + ' → ' + sub.end_date + '"'
                                 + ' onclick="event.stopPropagation();openEditGantt(' + sub.id + ')">'
+                                + (sWide ? escHtml(sub.title) : '')
                                 + '</div>';
-                        tlWrap += '<div class="gantt-bar-label-out" style="left:' + (parseFloat(slx) + parseFloat(sbw) + 4) + 'px;">'
-                                + escHtml(sub.title) + '</div>';
+                        if (!sWide) {
+                            tlWrap += '<div class="gantt-bar-label-out" style="left:' + (parseFloat(slx) + parseFloat(sbw) + 4) + 'px;">'
+                                    + escHtml(sub.title) + '</div>';
+                        }
                     }
                     tlWrap += '</div>';
                 });
