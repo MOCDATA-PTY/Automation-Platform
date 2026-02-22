@@ -14,13 +14,17 @@ scheduler = None
 
 def update_sync_health(station, status, message, records=0):
     """Write sync health info for a station to sync_health.json"""
+    import tempfile
     try:
         health_file = settings.SYNC_HEALTH_FILE
+        health_data = {}
         if os.path.exists(health_file):
-            with open(health_file, 'r') as f:
-                health_data = json.load(f)
-        else:
-            health_data = {}
+            try:
+                with open(health_file, 'r') as f:
+                    health_data = json.load(f)
+            except (json.JSONDecodeError, ValueError):
+                logger.warning(f"Corrupted sync_health.json, resetting")
+                health_data = {}
 
         local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
         health_data[station] = {
@@ -30,8 +34,16 @@ def update_sync_health(station, status, message, records=0):
             'records': records,
         }
 
-        with open(health_file, 'w') as f:
-            json.dump(health_data, f, indent=2)
+        # Atomic write to prevent corruption from concurrent workers
+        dir_name = os.path.dirname(health_file)
+        fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump(health_data, f, indent=2)
+            os.replace(tmp_path, health_file)
+        except Exception:
+            os.unlink(tmp_path)
+            raise
     except Exception as e:
         logger.error(f"Failed to update sync health for {station}: {e}")
 
