@@ -397,15 +397,15 @@
 .gantt-tl-row.level-0-row:hover { background:#14213d; }
 
 /* Level-1: Task row */
-.gantt-task-row.level-1 { background:#1e293b; min-height:52px; height:auto; }
+.gantt-task-row.level-1 { background:#1e293b; height:44px; }
 .gantt-task-row.level-1:hover { background:#243449; }
-.gantt-tl-row.level-1-row { background:#1e293b; min-height:52px; height:auto; }
+.gantt-tl-row.level-1-row { background:#1e293b; height:44px; }
 .gantt-tl-row.level-1-row:hover { background:#243449; }
 
 /* Level-2: Subtask row */
-.gantt-task-row.level-2 { background:#162032; min-height:40px; height:auto; }
+.gantt-task-row.level-2 { background:#162032; height:38px; }
 .gantt-task-row.level-2:hover { background:#1c2a3e; }
-.gantt-tl-row.level-2-row { background:#162032; min-height:40px; height:auto; }
+.gantt-tl-row.level-2-row { background:#162032; height:38px; }
 .gantt-tl-row.level-2-row:hover { background:#1c2a3e; }
 
 /* Label variants */
@@ -420,8 +420,8 @@
     overflow: visible;
     padding: 6px 0;
 }
-.gantt-task-label.level-1-label { padding-left:4px; font-weight:500; color:#cbd5e1; font-size:12px; justify-content:space-between; flex-wrap:wrap; white-space:normal; overflow:visible; align-items:flex-start; padding-top:4px; padding-bottom:4px; }
-.gantt-task-label.level-2-label { font-size:11px; color:#94a3b8; padding-left:18px; justify-content:space-between; flex-wrap:wrap; white-space:normal; overflow:visible; align-items:flex-start; padding-top:3px; padding-bottom:3px; }
+.gantt-task-label.level-1-label { padding-left:4px; font-weight:500; color:#cbd5e1; font-size:12px; justify-content:space-between; white-space:nowrap; overflow:hidden; align-items:center; }
+.gantt-task-label.level-2-label { font-size:11px; color:#94a3b8; padding-left:18px; justify-content:space-between; white-space:nowrap; overflow:hidden; align-items:center; }
 
 /* Project name row inside level-0 label */
 .gantt-proj-name-row { display:flex; align-items:center; gap:6px; width:100%; }
@@ -1050,7 +1050,7 @@ function buildGantt(projects) {
                 var taskBadgeLbl = statusLabelText(task.status);
                 taskHtml += '<div class="gantt-task-label level-1-label">'
                           + '<span class="gantt-priority-dot ' + task.priority + '"></span>'
-                          + '<span style="flex:1;min-width:0;word-break:break-word;">' + escHtml(stripPrefix(task.title)) + '</span>'
+                          + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">' + escHtml(stripPrefix(task.title)) + '</span>'
                           + '<span class="gantt-status-badge ' + taskBadgeCls + '" style="margin-left:4px;">' + taskBadgeLbl + '</span>'
                           + '</div></div>';
 
@@ -1093,7 +1093,7 @@ function buildGantt(projects) {
                               + '<span style="width:22px;flex-shrink:0;display:inline-block;"></span>'
                               + '<div class="gantt-task-label level-2-label">'
                               + '<span class="gantt-priority-dot ' + sub.priority + '"></span>'
-                              + '<span style="flex:1;min-width:0;word-break:break-word;">' + escHtml(sub.title) + '</span>'
+                              + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">' + escHtml(sub.title) + '</span>'
                               + '<span class="gantt-status-badge ' + subBadgeCls + '" style="margin-left:4px;">' + subBadgeLbl + '</span>'
                               + '</div></div>';
 
@@ -1142,30 +1142,6 @@ function buildGantt(projects) {
     console.log('[Gantt] Build complete. scrollToToday scheduled in 80ms.');
     setTimeout(scrollToToday, 80);
 
-    // After paint: log actual rendered row heights and sync mismatches
-    setTimeout(function() {
-        var leftRows  = Array.from(document.getElementById('gantt-task-body').children);
-        var rightRows = Array.from(document.getElementById('gantt-body').querySelectorAll('.gantt-tl-row'));
-        console.log('[Gantt][Heights] Left rows:', leftRows.length, '| Right rows:', rightRows.length);
-        var mismatch = 0;
-        leftRows.forEach(function(lRow, i) {
-            var rRow = rightRows[i];
-            if (!rRow) { console.warn('[Gantt][Heights] Row', i, '— no matching right-panel row!'); return; }
-            var lh = lRow.getBoundingClientRect().height;
-            var rh = rRow.getBoundingClientRect().height;
-            var cls = lRow.className;
-            if (Math.abs(lh - rh) > 1) {
-                mismatch++;
-                console.warn('[Gantt][Heights] ROW', i, 'MISMATCH — left:', lh.toFixed(1) + 'px, right:', rh.toFixed(1) + 'px | class:', cls);
-                // Fix: force right row to match left
-                rRow.style.height = lh + 'px';
-                rRow.style.minHeight = lh + 'px';
-            } else {
-                console.log('[Gantt][Heights] Row', i, 'OK — left:', lh.toFixed(1) + 'px, right:', rh.toFixed(1) + 'px | class:', cls);
-            }
-        });
-        console.log('[Gantt][Heights] Done. Mismatches fixed:', mismatch);
-    }, 150);
 }
 
 function scrollToToday() {
