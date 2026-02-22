@@ -138,7 +138,7 @@
     margin-bottom: 10px;
 }
 .btn-goto-today {
-    background: #054B70;
+    background: #3b82f6;
     color: #fff;
     border: none;
     padding: 7px 16px;
@@ -149,58 +149,61 @@
     cursor: pointer;
     transition: background 0.15s;
 }
-.btn-goto-today:hover { background: #043a58; }
+.btn-goto-today:hover { background: #2563eb; }
 .gantt-legend { display:flex; gap:16px; flex-wrap:wrap; }
-.legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:#605e5c; font-weight:600; }
+.legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:#64748b; font-weight:600; }
 .legend-dot { width:10px; height:10px; border-radius:3px; }
-.legend-dot.not-started { background:#a19f9d; }
-.legend-dot.in-progress { background:#054B70; }
-.legend-dot.completed   { background:#107c10; }
-.legend-dot.today       { background:rgba(5,75,112,0.5); width:3px; border-radius:0; }
+.legend-dot.not-started { background:#4b5563; }
+.legend-dot.in-progress { background:#f59e0b; }
+.legend-dot.completed   { background:#22c55e; }
+.legend-dot.today       { background:#38bdf8; width:3px; border-radius:0; }
 
 /* Two-panel container */
 .gantt-container {
     display: flex;
-    border: 1px solid #edebe9;
+    border: 1px solid #334155;
     border-radius: 8px;
     overflow: hidden;
-    background: #fff;
+    background: #0f172a;
     height: calc(100vh - 400px);
     min-height: 420px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
 }
 
 /* Left: task name panel */
 .gantt-task-panel {
-    width: 340px;
-    min-width: 340px;
+    width: 390px;
+    min-width: 390px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    border-right: 2px solid #edebe9;
+    border-right: 1px solid #334155;
     overflow: hidden;
+    background: #1e293b;
 }
 .gantt-task-header {
-    height: 40px;
-    background: #f3f2f1;
+    height: 44px;
+    background: #0f172a;
     display: flex;
     align-items: center;
     padding: 0 14px;
     font-size: 11px;
     font-weight: 700;
-    color: #605e5c;
+    color: #64748b;
     text-transform: uppercase;
     letter-spacing: 0.6px;
     flex-shrink: 0;
-    border-bottom: 1px solid #edebe9;
+    border-bottom: 1px solid #334155;
 }
-.gantt-task-body { flex:1; overflow-y:auto; overflow-x:hidden; }
-.gantt-task-body::-webkit-scrollbar { width:4px; }
-.gantt-task-body::-webkit-scrollbar-track { background:transparent; }
-.gantt-task-body::-webkit-scrollbar-thumb { background:#c8c6c4; border-radius:2px; }
+.gantt-task-body { flex:1; overflow-y:auto; overflow-x:hidden; background:#1e293b; }
+.gantt-task-body::-webkit-scrollbar { width:6px; }
+.gantt-task-body::-webkit-scrollbar-track { background:#0f172a; border-radius:4px; }
+.gantt-task-body::-webkit-scrollbar-thumb { background:#475569; border-radius:4px; border:1px solid #0f172a; }
+.gantt-task-body::-webkit-scrollbar-thumb:hover { background:#64748b; }
 
 /* Right: timeline panel */
-.gantt-timeline-panel { flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden; }
-.gantt-header-wrapper { flex-shrink:0; overflow:hidden; height:40px; border-bottom:1px solid #edebe9; background:#f3f2f1; }
+.gantt-timeline-panel { flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden; background:#0f172a; }
+.gantt-header-wrapper { flex-shrink:0; overflow:hidden; height:44px; border-bottom:1px solid #334155; background:#0f172a; }
 .gantt-header-inner { display:flex; height:100%; will-change:transform; }
 .gantt-month-cell {
     flex-shrink: 0;
@@ -209,36 +212,38 @@
     justify-content: center;
     font-size: 11px;
     font-weight: 700;
-    color: #605e5c;
+    color: #64748b;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    border-right: 1px solid #edebe9;
+    border-right: 1px solid #334155;
     white-space: nowrap;
+    background: #0f172a;
 }
 .gantt-body {
     flex: 1;
     overflow-x: auto;
     overflow-y: auto;
     position: relative;
+    background: #0f172a;
 }
-.gantt-body::-webkit-scrollbar { width:6px; height:6px; }
-.gantt-body::-webkit-scrollbar-track { background:transparent; }
-.gantt-body::-webkit-scrollbar-thumb { background:#c8c6c4; border-radius:3px; }
+.gantt-body::-webkit-scrollbar { width:8px; height:8px; }
+.gantt-body::-webkit-scrollbar-track { background:#0f172a; border-radius:4px; }
+.gantt-body::-webkit-scrollbar-thumb { background:linear-gradient(135deg,#475569,#64748b); border-radius:4px; border:1px solid #0f172a; }
+.gantt-body::-webkit-scrollbar-thumb:hover { background:linear-gradient(135deg,#64748b,#94a3b8); }
 
-/* Task rows (left panel) */
+/* Task rows (left panel) — default height for levels 1/2 */
 .gantt-task-row {
     height: 48px;
     display: flex;
     align-items: center;
     padding: 0 8px 0 6px;
-    border-bottom: 1px solid #f3f2f1;
+    border-bottom: 1px solid #1e3358;
     cursor: pointer;
     user-select: none;
     box-sizing: border-box;
+    transition: background 0.15s;
 }
-.gantt-task-row:hover { background: #faf9f8; }
-.gantt-task-row.parent-row { background: #f8f7f6; }
-.gantt-task-row.parent-row:hover { background: #f0efee; }
+.gantt-task-row:hover { background: #263548; }
 
 /* Timeline rows (right panel) */
 .gantt-tl-row {
@@ -246,23 +251,22 @@
     position: relative;
     display: flex;
     align-items: center;
-    border-bottom: 1px solid #f3f2f1;
+    border-bottom: 1px solid #1e3358;
     box-sizing: border-box;
     flex-shrink: 0;
+    transition: background 0.15s;
 }
-.gantt-tl-row:hover { background: #faf9f8; }
-.gantt-tl-row.parent-tl-row { background: #f8f7f6; }
-.gantt-tl-row.parent-tl-row:hover { background: #f0efee; }
-.gantt-grid-cell { flex-shrink:0; height:100%; border-right:1px solid #f3f2f1; box-sizing:border-box; }
+.gantt-tl-row:hover { background: #182438; }
+.gantt-grid-cell { flex-shrink:0; height:100%; border-right:1px solid #1e2d3d; box-sizing:border-box; }
 
 /* Expand/collapse button */
 .gantt-expand-btn {
     width: 18px; height: 18px;
-    border: 1px solid #c8c6c4;
+    border: 1px solid #475569;
     border-radius: 3px;
-    background: #fff;
-    color: #605e5c;
-    font-size: 13px;
+    background: #334155;
+    color: #94a3b8;
+    font-size: 12px;
     font-weight: 700;
     cursor: pointer;
     flex-shrink: 0;
@@ -270,15 +274,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.1s;
+    transition: background 0.1s, border-color 0.1s;
     font-family: monospace;
 }
-.gantt-expand-btn:hover { background: #edebe9; }
+.gantt-expand-btn:hover { background: #475569; border-color: #64748b; color: #e2e8f0; }
 
 /* Task name label */
 .gantt-task-label {
     font-size: 12px;
-    color: #1b1a19;
+    color: #cbd5e1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -288,21 +292,45 @@
     align-items: center;
     gap: 5px;
 }
-.gantt-task-label.parent-label { font-weight: 600; }
-.gantt-task-label.subtask-label { font-size: 11px; color: #605e5c; padding-left: 16px; }
 
-.gantt-priority-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
-.gantt-priority-dot.critical { background:#d13438; }
-.gantt-priority-dot.high     { background:#ca5010; }
-.gantt-priority-dot.medium   { background:#054B70; }
-.gantt-priority-dot.low      { background:#c8c6c4; }
+/* Priority dot */
+.gantt-priority-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.gantt-priority-dot.critical { background:#ef4444; box-shadow:0 0 5px rgba(239,68,68,0.5); }
+.gantt-priority-dot.high     { background:#f97316; }
+.gantt-priority-dot.medium   { background:#3b82f6; }
+.gantt-priority-dot.low      { background:#475569; }
+
+/* Status badge */
+.gantt-status-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    text-transform: capitalize;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+}
+.gantt-status-badge.not-started { background:#292524; color:#a8a29e; }
+.gantt-status-badge.in-progress { background:#78350f; color:#fde68a; }
+.gantt-status-badge.review      { background:#3b0764; color:#d8b4fe; }
+.gantt-status-badge.completed   { background:#14532d; color:#86efac; }
+.gantt-status-badge.backlog     { background:#1e293b; color:#64748b; border:1px solid #334155; }
+
+/* Progress bar */
+.gantt-progress-wrap { display:flex; align-items:center; gap:6px; }
+.gantt-progress-track { flex:1; height:5px; background:#334155; border-radius:3px; overflow:hidden; min-width:60px; }
+.gantt-progress-fill { height:100%; border-radius:3px; background:#3b82f6; transition:width 0.5s ease; }
+.gantt-progress-fill.high-pct { background:#22c55e; }
+.gantt-progress-fill.mid-pct  { background:#f59e0b; }
+.gantt-progress-pct { font-size:10px; color:#64748b; font-weight:600; min-width:28px; text-align:right; flex-shrink:0; }
 
 /* Bars */
 .gantt-bar {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    height: 28px;
+    height: 26px;
     border-radius: 5px;
     cursor: pointer;
     z-index: 3;
@@ -313,57 +341,83 @@
     overflow: hidden;
     font-size: 11px;
     font-weight: 600;
-    color: #fff;
-    transition: opacity 0.15s, box-shadow 0.15s;
+    color: rgba(255,255,255,0.9);
+    transition: filter 0.15s, box-shadow 0.15s, border-color 0.15s;
     min-width: 8px;
     box-sizing: border-box;
+    border: 2px solid transparent;
 }
-.gantt-bar:hover { opacity: 0.85; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-.gantt-bar.not-started { background: #a19f9d; }
-.gantt-bar.in-progress { background: #054B70; }
-.gantt-bar.completed   { background: #107c10; }
-.gantt-bar.parent-bar  { height: 18px; border-radius: 3px; opacity: 0.9; }
-.gantt-bar.subtask-bar { height: 24px; }
+.gantt-bar:hover { filter:brightness(1.12); box-shadow:0 4px 16px rgba(0,0,0,0.4); border-color:#38bdf8; }
+.gantt-bar.not-started { background:#374151; color:#9ca3af; }
+.gantt-bar.in-progress { background:linear-gradient(90deg,#b45309,#d97706); }
+.gantt-bar.in-progress:hover { box-shadow:0 4px 16px rgba(245,158,11,0.4); }
+.gantt-bar.completed   { background:linear-gradient(90deg,#15803d,#16a34a); }
+.gantt-bar.completed:hover { box-shadow:0 4px 16px rgba(34,197,94,0.4); }
 
 /* Today line */
 .gantt-today-line {
     position: absolute;
     top: 0; bottom: 0;
     width: 2px;
-    background: rgba(5,75,112,0.4);
+    background: linear-gradient(180deg,#38bdf8,rgba(59,130,246,0.3));
     z-index: 10;
     pointer-events: none;
 }
 
 /* Empty state */
-.gantt-empty { padding:48px 24px; text-align:center; color:#a19f9d; font-size:14px; }
+.gantt-empty { padding:48px 24px; text-align:center; color:#475569; font-size:14px; }
 .gantt-empty-icon { font-size:36px; margin-bottom:12px; }
 
-/* ── 3-Level row styles ── */
-/* Level-0: Project summary row */
-.gantt-task-row.level-0 { background:#e8e6e4; height:44px; }
-.gantt-task-row.level-0:hover { background:#dededc; }
-.gantt-tl-row.level-0-row { background:#e8e6e4; height:44px; }
-.gantt-tl-row.level-0-row:hover { background:#dededc; }
-.gantt-task-label.level-0-label { font-weight:700; font-size:13px; color:#054B70; letter-spacing:0.2px; }
+/* ── Level-0: Project row ── */
+.gantt-task-row.level-0 {
+    background: #0f172a;
+    height: 76px;
+    padding: 0 6px;
+    align-items: center;
+    border-bottom: 2px solid #334155;
+    cursor: default;
+}
+.gantt-task-row.level-0:hover { background: #14213d; }
+.gantt-tl-row.level-0-row { background:#0f172a; height:76px; border-bottom:2px solid #334155; }
+.gantt-tl-row.level-0-row:hover { background:#14213d; }
 
 /* Level-1: Task row */
-.gantt-task-row.level-1 { background:#f8f7f6; }
-.gantt-task-row.level-1:hover { background:#f0efee; }
-.gantt-tl-row.level-1-row { background:#f8f7f6; }
-.gantt-tl-row.level-1-row:hover { background:#f0efee; }
-.gantt-task-label.level-1-label { padding-left:6px; font-weight:500; }
+.gantt-task-row.level-1 { background:#1e293b; height:52px; }
+.gantt-task-row.level-1:hover { background:#243449; }
+.gantt-tl-row.level-1-row { background:#1e293b; height:52px; }
+.gantt-tl-row.level-1-row:hover { background:#243449; }
 
 /* Level-2: Subtask row */
-.gantt-task-row.level-2 {}
-.gantt-task-row.level-2:hover { background:#faf9f8; }
-.gantt-tl-row.level-2-row {}
-.gantt-tl-row.level-2-row:hover { background:#faf9f8; }
-.gantt-task-label.level-2-label { font-size:12px; color:#323130; padding-left:24px; }
+.gantt-task-row.level-2 { background:#162032; height:40px; }
+.gantt-task-row.level-2:hover { background:#1c2a3e; }
+.gantt-tl-row.level-2-row { background:#162032; height:40px; }
+.gantt-tl-row.level-2-row:hover { background:#1c2a3e; }
 
-/* Summary/task/subtask bar variants */
-.gantt-bar.summary-bar { height:14px; border-radius:3px; opacity:0.85; }
-.gantt-bar.task-bar    { height:28px; }
+/* Label variants */
+.gantt-task-label.level-0-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f1f5f9;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    white-space: normal;
+    overflow: visible;
+    padding: 6px 0;
+}
+.gantt-task-label.level-1-label { padding-left:4px; font-weight:500; color:#cbd5e1; font-size:12px; justify-content:space-between; }
+.gantt-task-label.level-2-label { font-size:11px; color:#94a3b8; padding-left:18px; justify-content:space-between; }
+
+/* Project name row inside level-0 label */
+.gantt-proj-name-row { display:flex; align-items:center; gap:6px; width:100%; }
+.gantt-proj-name { font-size:13px; font-weight:700; color:#f1f5f9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0; }
+.gantt-proj-meta { font-size:10px; color:#64748b; display:flex; gap:10px; width:100%; }
+
+/* Bar variants */
+.gantt-bar.summary-bar { height:10px; border-radius:3px; opacity:0.9; border:none; }
+.gantt-bar.summary-bar:hover { filter:brightness(1.12); box-shadow:0 2px 8px rgba(0,0,0,0.3); border:none; }
+.gantt-bar.task-bar    { height:26px; }
+.gantt-bar.subtask-bar { height:18px; opacity:0.9; }
 
 /* ──────── MODAL ──────── */
 .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:1000; align-items:center; justify-content:center; }
@@ -757,6 +811,34 @@ function ganttStatusCls(status) {
     if (status === 'in_progress' || status === 'review') return 'in-progress';
     return 'not-started';
 }
+function calcProgress(proj) {
+    var total = 0, done = 0;
+    (proj.tasks || []).forEach(function(t) {
+        total++;
+        if (t.status === 'done') done++;
+        (t.subtasks || []).forEach(function(s) {
+            total++;
+            if (s.status === 'done') done++;
+        });
+    });
+    return total === 0 ? 0 : Math.round((done / total) * 100);
+}
+function statusBadgeCls(status) {
+    if (status === 'done')        return 'completed';
+    if (status === 'in_progress') return 'in-progress';
+    if (status === 'review')      return 'review';
+    if (status === 'backlog')     return 'backlog';
+    return 'not-started';
+}
+function statusLabelText(status) {
+    var map = { backlog:'Backlog', todo:'Not Started', in_progress:'In Progress', review:'Review', done:'Done' };
+    return map[status] || status;
+}
+function progressFillCls(pct) {
+    if (pct >= 80) return 'high-pct';
+    if (pct >= 40) return 'mid-pct';
+    return '';
+}
 function monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
 function fmtMonth(d) {
     return d.toLocaleString('default', { month: 'short' }) + " '" + String(d.getFullYear()).slice(2);
@@ -851,10 +933,27 @@ function buildGantt(projects) {
             var projStatusCls = ganttStatusCls(proj.status);
 
             // ── Level-0: Project row (left panel)
+            var projPct      = calcProgress(proj);
+            var projBadgeCls = statusBadgeCls(proj.status || 'todo');
+            var projBadgeLbl = statusLabelText(proj.status || 'todo');
+            var projFillCls  = progressFillCls(projPct);
+            var projDates    = (proj.start_date && proj.end_date)
+                ? '&#128197; ' + proj.start_date.slice(0,7).replace('-','/') + ' &#8211; ' + proj.end_date.slice(0,7).replace('-','/')
+                : '';
             taskHtml += '<div class="gantt-task-row level-0">';
-            taskHtml += '<button class="gantt-expand-btn" onclick="toggleProject(event,' + projIdx + ')">'
+            taskHtml += '<button class="gantt-expand-btn" style="align-self:flex-start;margin-top:6px;" onclick="toggleProject(event,' + projIdx + ')">'
                       + (projCollapsed ? '+' : '&minus;') + '</button>';
-            taskHtml += '<div class="gantt-task-label level-0-label">' + escHtml(proj.name) + '</div>';
+            taskHtml += '<div class="gantt-task-label level-0-label">'
+                      + '<div class="gantt-proj-name-row">'
+                      +   '<span class="gantt-proj-name">' + escHtml(proj.name) + '</span>'
+                      +   '<span class="gantt-status-badge ' + projBadgeCls + '">' + projBadgeLbl + '</span>'
+                      + '</div>'
+                      + (projDates ? '<div class="gantt-proj-meta"><span>' + projDates + '</span></div>' : '')
+                      + '<div class="gantt-progress-wrap" style="width:100%;max-width:320px;">'
+                      +   '<div class="gantt-progress-track"><div class="gantt-progress-fill ' + projFillCls + '" style="width:' + projPct + '%;"></div></div>'
+                      +   '<span class="gantt-progress-pct">' + projPct + '%</span>'
+                      + '</div>'
+                      + '</div>';
             taskHtml += '</div>';
 
             // Level-0 timeline row (right panel)
@@ -887,9 +986,12 @@ function buildGantt(projects) {
                 } else {
                     taskHtml += '<span style="width:22px;flex-shrink:0;display:inline-block;"></span>';
                 }
+                var taskBadgeCls = statusBadgeCls(task.status);
+                var taskBadgeLbl = statusLabelText(task.status);
                 taskHtml += '<div class="gantt-task-label level-1-label">'
                           + '<span class="gantt-priority-dot ' + task.priority + '"></span>'
-                          + '<span style="overflow:hidden;text-overflow:ellipsis;">' + escHtml(stripPrefix(task.title)) + '</span>'
+                          + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;">' + escHtml(stripPrefix(task.title)) + '</span>'
+                          + '<span class="gantt-status-badge ' + taskBadgeCls + '" style="margin-left:4px;">' + taskBadgeLbl + '</span>'
                           + '</div></div>';
 
                 // Level-1 right panel
@@ -914,13 +1016,16 @@ function buildGantt(projects) {
                     var hideSub = (projCollapsed || taskCollapsed) ? 'display:none;' : '';
 
                     // Level-2 left panel
+                    var subBadgeCls = statusBadgeCls(sub.status);
+                    var subBadgeLbl = statusLabelText(sub.status);
                     taskHtml += '<div class="gantt-task-row level-2" data-level="2"'
                               + ' data-proj="' + projIdx + '" data-task="' + task.id + '"'
                               + ' style="' + hideSub + '" onclick="openEditGantt(' + sub.id + ')">'
                               + '<span style="width:22px;flex-shrink:0;display:inline-block;"></span>'
                               + '<div class="gantt-task-label level-2-label">'
                               + '<span class="gantt-priority-dot ' + sub.priority + '"></span>'
-                              + '<span style="overflow:hidden;text-overflow:ellipsis;">' + escHtml(sub.title) + '</span>'
+                              + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;">' + escHtml(sub.title) + '</span>'
+                              + '<span class="gantt-status-badge ' + subBadgeCls + '" style="margin-left:4px;">' + subBadgeLbl + '</span>'
                               + '</div></div>';
 
                     // Level-2 right panel
