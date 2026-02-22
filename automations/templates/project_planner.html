@@ -354,6 +354,20 @@
 .gantt-bar.completed   { background:linear-gradient(90deg,#15803d,#16a34a); }
 .gantt-bar.completed:hover { box-shadow:0 4px 16px rgba(34,197,94,0.4); }
 
+/* Outside-bar label (shown when bar is too narrow for inner text) */
+.gantt-bar-label-out {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    font-weight: 600;
+    color: #94a3b8;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 4;
+    padding-left: 4px;
+}
+
 /* Today line */
 .gantt-today-line {
     position: absolute;
@@ -1046,13 +1060,18 @@ function buildGantt(projects) {
                 if (task.start_date && task.end_date) {
                     var tlx = toPx(task.start_date).toFixed(1);
                     var tbw = barW(task.start_date, task.end_date).toFixed(1);
+                    var tShowInner = parseFloat(tbw) > 60;
                     console.log('[Gantt]   Task bar: left=' + tlx + 'px, width=' + tbw + 'px');
                     tlWrap += '<div class="gantt-bar task-bar ' + taskStatusCls + '"'
                             + ' style="left:' + tlx + 'px;width:' + tbw + 'px;"'
                             + ' title="' + escHtml(task.title) + ': ' + task.start_date + ' → ' + task.end_date + '"'
                             + ' onclick="event.stopPropagation();openEditGantt(' + task.id + ')">'
-                            + (parseFloat(tbw) > 30 ? escHtml(stripPrefix(task.title)) : '')
+                            + (tShowInner ? escHtml(stripPrefix(task.title)) : '')
                             + '</div>';
+                    if (!tShowInner) {
+                        tlWrap += '<div class="gantt-bar-label-out" style="left:' + (parseFloat(tlx) + parseFloat(tbw) + 4) + 'px;">'
+                                + escHtml(stripPrefix(task.title)) + '</div>';
+                    }
                 }
                 tlWrap += '</div>';
 
@@ -1090,14 +1109,19 @@ function buildGantt(projects) {
                     if (sub.start_date && sub.end_date) {
                         var slx = toPx(sub.start_date).toFixed(1);
                         var sbw = barW(sub.start_date, sub.end_date).toFixed(1);
+                        var sShowInner = parseFloat(sbw) > 60;
                         console.log('[Gantt]     Subtask bar: left=' + slx + 'px, width=' + sbw + 'px',
-                                    '| show label:', parseFloat(sbw) > 50);
+                                    '| show label:', sShowInner);
                         tlWrap += '<div class="gantt-bar subtask-bar ' + subStatusCls + '"'
                                 + ' style="left:' + slx + 'px;width:' + sbw + 'px;"'
                                 + ' title="' + escHtml(sub.title) + ': ' + sub.start_date + ' → ' + sub.end_date + '"'
                                 + ' onclick="event.stopPropagation();openEditGantt(' + sub.id + ')">'
-                                + (parseFloat(sbw) > 50 ? escHtml(sub.title) : '')
+                                + (sShowInner ? escHtml(sub.title) : '')
                                 + '</div>';
+                        if (!sShowInner) {
+                            tlWrap += '<div class="gantt-bar-label-out" style="left:' + (parseFloat(slx) + parseFloat(sbw) + 4) + 'px;">'
+                                    + escHtml(sub.title) + '</div>';
+                        }
                     }
                     tlWrap += '</div>';
                 });
