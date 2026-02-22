@@ -910,8 +910,8 @@ function buildGantt(projects) {
     var rangeStart = monthStart(new Date(Math.min.apply(null, allDates)));
     var rangeEnd   = new Date(Math.max.apply(null, allDates));
     rangeEnd = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth() + 1, 0);
-    rangeStart.setMonth(rangeStart.getMonth() - 1);
-    rangeEnd.setMonth(rangeEnd.getMonth() + 1);
+    rangeStart.setMonth(rangeStart.getMonth() - 3);
+    rangeEnd.setMonth(rangeEnd.getMonth() + 3);
     rangeEnd = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth() + 1, 0);
 
     var months = [];
@@ -1146,10 +1146,13 @@ function buildGantt(projects) {
 
 function scrollToToday() {
     var body = document.getElementById('gantt-body');
+    var headerInner = document.getElementById('gantt-header-inner');
     if (!body || !ganttState.pxPerDay) return;
     var today = new Date(); today.setHours(0,0,0,0);
     var todayPx = ((today - ganttState.rangeStart) / 86400000) * ganttState.pxPerDay;
-    body.scrollLeft = Math.max(0, todayPx - body.clientWidth / 2);
+    var scrollPos = Math.max(0, todayPx - body.clientWidth / 3);
+    body.scrollLeft = scrollPos;
+    if (headerInner) headerInner.style.transform = 'translateX(-' + scrollPos + 'px)';
 }
 
 function toggleProject(e, projIdx) {
