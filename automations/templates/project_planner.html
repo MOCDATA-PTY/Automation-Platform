@@ -150,13 +150,6 @@
     transition: background 0.15s;
 }
 .btn-goto-today:hover { background: #2563eb; }
-.gantt-legend { display:flex; gap:16px; flex-wrap:wrap; }
-.legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:#64748b; font-weight:600; }
-.legend-dot { width:10px; height:10px; border-radius:3px; }
-.legend-dot.not-started { background:#4b5563; }
-.legend-dot.in-progress { background:#f59e0b; }
-.legend-dot.completed   { background:#22c55e; }
-.legend-dot.today       { background:#38bdf8; width:3px; border-radius:0; }
 
 /* Two-panel container */
 .gantt-container {
@@ -540,12 +533,6 @@
             </div>
             <div class="gantt-body" id="gantt-body"></div>
         </div>
-    </div>
-    <div class="gantt-legend" style="margin-top:8px;">
-        <div class="legend-item"><div class="legend-dot not-started"></div> Not Started</div>
-        <div class="legend-item"><div class="legend-dot in-progress"></div> In Progress</div>
-        <div class="legend-item"><div class="legend-dot completed"></div> Completed</div>
-        <div class="legend-item"><div class="legend-dot today"></div> Today</div>
     </div>
 </div>
 
@@ -1152,8 +1139,10 @@ function scrollToToday() {
     var today = new Date(); today.setHours(0,0,0,0);
     var todayPx = ((today - ganttState.rangeStart) / 86400000) * ganttState.pxPerDay;
     var scrollPos = Math.max(0, todayPx - body.clientWidth / 3);
-    body.scrollLeft = scrollPos;
-    if (headerInner) headerInner.style.transform = 'translateX(-' + scrollPos + 'px)';
+    requestAnimationFrame(function() {
+        body.scrollLeft = scrollPos;
+        if (headerInner) headerInner.style.transform = 'translateX(-' + body.scrollLeft + 'px)';
+    });
 }
 
 function toggleProject(e, projIdx) {
