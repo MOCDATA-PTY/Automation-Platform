@@ -628,9 +628,15 @@
     [data-theme="dark"] .sync-status { background: var(--surface2); color: var(--text-secondary); }
 
     [data-theme="dark"] .monitor-card { background: var(--surface); border-color: var(--border); }
+    [data-theme="dark"] .card-header { background: var(--surface2); border-color: var(--border); }
     [data-theme="dark"] .monitor-table th { color: var(--text-muted); border-color: var(--border); background: var(--surface2); }
     [data-theme="dark"] .monitor-table td { color: var(--text-primary); border-color: var(--border); }
-    [data-theme="dark"] .monitor-table tr:hover td { background: var(--surface2); }
+    [data-theme="dark"] .monitor-table tbody tr:hover td { background: transparent; }
+    [data-theme="dark"] .monitor-table tbody tr:hover { border-left-color: transparent; }
+    [data-theme="dark"] .station-link { color: var(--text-primary); }
+    [data-theme="dark"] .sync-time, [data-theme="dark"] .records-count { color: var(--text-primary); }
+    [data-theme="dark"] .time-ago { color: var(--text-muted); }
+    [data-theme="dark"] .msg-text { color: var(--text-muted); }
 
     [data-theme="dark"] .powerbi-section { background: var(--surface); border-color: var(--border); }
     [data-theme="dark"] #pbi-config-panel { background: var(--surface2); border-color: var(--border); }
