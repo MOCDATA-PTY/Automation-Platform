@@ -250,11 +250,28 @@ def extract_report_date(ws):
         pass
     return None
 
+KNOWN_BRANCHES = ['ATL', 'HEC', 'HNL', 'HOU', 'ICS', 'IMP', 'JFK', 'LAX', 'LCL', 'ORD', 'PPG', 'CON', 'DOR']
+
+def get_branch_from_file(ws):
+    """Extract branch code from inside the Excel file by scanning header rows."""
+    for row_idx in range(1, 12):
+        try:
+            for col_idx in range(1, 5):
+                cell_val = str(ws.cell(row=row_idx, column=col_idx).value or '')
+                # Match "Transaction Branches: IMP" style
+                m = re.search(r'Transaction Branches?:\s*([A-Z\-]+)', cell_val, re.IGNORECASE)
+                if m:
+                    candidate = m.group(1).strip().upper()
+                    if candidate in KNOWN_BRANCHES:
+                        return candidate
+        except:
+            continue
+    return None
+
+
 def process_excel_file(file_content, filename):
     """Process Excel file and return data rows with report date"""
     branch = get_branch(filename)
-    if not branch:
-        return []
 
     rows = []
 
@@ -262,6 +279,13 @@ def process_excel_file(file_content, filename):
         # Try openpyxl for .xlsx
         wb = openpyxl.load_workbook(file_content, data_only=True)
         ws = wb.active
+
+        # If filename didn't reveal branch, read it from inside the file
+        if not branch:
+            branch = get_branch_from_file(ws)
+        if not branch:
+            print(f"  Could not determine branch for {filename} - skipping")
+            return []
 
         # Extract report date from row 11
         report_date = extract_report_date(ws)
@@ -280,13 +304,24 @@ def process_excel_file(file_content, filename):
             # WIDE FORMAT: Pivot data from columns to rows
             print(f"  Processing WIDE format with {len(month_columns)} month columns")
 
+            # Detect debtor and debtor_name columns from header row 13
+            debtor_col, name_col = 4, 5
+            full_header = [ws.cell(row=13, column=i).value for i in range(1, ws.max_column + 1)]
+            for ci, v in enumerate(full_header, start=1):
+                if v and str(v).strip().lower() == 'debtor':
+                    debtor_col = ci
+                if v and str(v).strip().lower() in ('debtor name', 'name'):
+                    name_col = ci
+
             # Process data rows (starting from row 14)
             for row_idx in range(14, ws.max_row + 1):
-                debtor = ws.cell(row=row_idx, column=4).value  # Column D = Debtor
+                debtor = ws.cell(row=row_idx, column=debtor_col).value
                 if not debtor:
                     continue
 
                 debtor = str(debtor).strip()
+                debtor_name = ws.cell(row=row_idx, column=name_col).value
+                debtor_name = str(debtor_name).strip() if debtor_name else ''
 
                 # Process each month column
                 for col_idx, month_val in month_columns:
@@ -298,7 +333,7 @@ def process_excel_file(file_content, filename):
                         month = month_val % 100
                         date_str = f"{year:04d}-{month:02d}-01"
 
-                        rows.append((debtor, date_str, branch, value, report_date))
+                        rows.append((debtor, debtor_name, date_str, branch, value, report_date))
 
         else:
             # LONG FORMAT: Original processing (one row per value)
@@ -306,6 +341,7 @@ def process_excel_file(file_content, filename):
             for row in ws.iter_rows(min_row=2, values_only=True):
                 if row and len(row) >= 4 and row[0]:
                     debtor = str(row[0]).strip() if row[0] else None
+                    debtor_name = str(row[1]).strip() if len(row) > 1 and row[1] else ''
                     date_val = row[2] if len(row) > 2 else None
                     value = float(row[3]) if len(row) > 3 and row[3] else 0
 
@@ -330,7 +366,7 @@ def process_excel_file(file_content, filename):
                             date_str = str(date_val) if date_val else None
 
                     if debtor and date_str and value != 0:
-                        rows.append((debtor, date_str, branch, value, report_date))
+                        rows.append((debtor, debtor_name, date_str, branch, value, report_date))
 
     except Exception as e:
         print(f"  Error with openpyxl: {e}, trying xlrd...")
@@ -351,13 +387,23 @@ def process_excel_file(file_content, filename):
 
             if month_columns:
                 # WIDE FORMAT
+                # Detect debtor and name columns from header row (0-indexed row 12)
+                hdr = ws.row_values(12)
+                debtor_col, name_col = 3, 4
+                for ci, v in enumerate(hdr):
+                    if v and str(v).strip().lower() == 'debtor':
+                        debtor_col = ci
+                    if v and str(v).strip().lower() in ('debtor name', 'name'):
+                        name_col = ci
+
                 for row_idx in range(13, ws.nrows):  # Row 14+ (0-indexed as 13+)
                     row = ws.row_values(row_idx)
-                    debtor = row[3] if len(row) > 3 else None
+                    debtor = row[debtor_col] if len(row) > debtor_col else None
                     if not debtor:
                         continue
 
                     debtor = str(debtor).strip()
+                    debtor_name = str(row[name_col]).strip() if len(row) > name_col and row[name_col] else ''
 
                     for col_idx, month_val in month_columns:
                         value = row[col_idx] if len(row) > col_idx else None
@@ -365,13 +411,14 @@ def process_excel_file(file_content, filename):
                             year = month_val // 100
                             month = month_val % 100
                             date_str = f"{year:04d}-{month:02d}-01"
-                            rows.append((debtor, date_str, branch, value, report_date))
+                            rows.append((debtor, debtor_name, date_str, branch, value, report_date))
             else:
                 # LONG FORMAT
                 for row_idx in range(1, ws.nrows):
                     row = ws.row_values(row_idx)
                     if row and len(row) >= 4 and row[0]:
                         debtor = str(row[0]).strip() if row[0] else None
+                        debtor_name = str(row[1]).strip() if len(row) > 1 and row[1] else ''
                         date_val = row[2] if len(row) > 2 else None
                         value = float(row[3]) if len(row) > 3 and row[3] else 0
 
@@ -393,7 +440,7 @@ def process_excel_file(file_content, filename):
                                 date_str = str(date_val)
 
                         if debtor and date_str and value != 0:
-                            rows.append((debtor, date_str, branch, value, report_date))
+                            rows.append((debtor, debtor_name, date_str, branch, value, report_date))
         except Exception as e:
             print(f"  Error processing {filename}: {e}")
             return []
@@ -428,11 +475,12 @@ def sync_turnover_data():
         with connection.cursor() as cur:
             # New query that only updates if the new report is newer (or if no report_date exists)
             query = """
-                INSERT INTO turnover_data (debtor, date, branch, value, report_date)
+                INSERT INTO turnover_data (debtor, debtor_name, date, branch, value, report_date)
                 VALUES %s
                 ON CONFLICT (debtor, date, branch)
                 DO UPDATE SET
                     value = EXCLUDED.value,
+                    debtor_name = EXCLUDED.debtor_name,
                     report_date = EXCLUDED.report_date
                 WHERE
                     turnover_data.report_date IS NULL
@@ -465,12 +513,10 @@ def yyyymm_to_date(month_yyyymm):
 
 def calculate_week_number(report_date, month_yyyymm):
     """Calculate week number based on report date and data month.
-    For previous months (past month end), always Week 5.
-    For current month: Days 1-7 = None, Days 8+ divided proportionally into 4 weeks.
-    Every month gets Weeks 1-4 within the month, then Week 5 when next month comes.
+    Week 1 = 8th, Week 2 = 15th, Week 3 = 22nd, Week 4 = 29th, Week 5 = end of month.
+    Feb only has 4 weeks: Week 1=8th, Week 2=15th, Week 3=22nd, Week 4=28th (final).
+    For previous months (past month end), Week 5 (or Week 4 for Feb).
     """
-    import calendar
-
     # Extract year and month from YYYYMM
     data_year = month_yyyymm // 100
     data_month = month_yyyymm % 100
@@ -480,8 +526,10 @@ def calculate_week_number(report_date, month_yyyymm):
     report_month = report_date.month
 
     # If the data month is BEFORE the report month, it's past the month end
-    # So this is the final/closing week = Week 5
+    # Feb only has 4 weeks, so final week = Week 4. All other months = Week 5.
     if (data_year < report_year) or (data_year == report_year and data_month < report_month):
+        if data_month == 2:
+            return 4  # Feb final week is Week 4
         return 5  # Final week for previous month
 
     # Same month as report - calculate based on report date day
@@ -491,24 +539,27 @@ def calculate_week_number(report_date, month_yyyymm):
     if day <= 7:
         return None  # Too early - no week yet
 
-    # Get last day of the data month
-    last_day = calendar.monthrange(data_year, data_month)[1]
+    # February: only 4 weeks (no 29th), Week 1=8, Week 2=15, Week 3=22, Week 4=28 (final)
+    if data_month == 2:
+        if day <= 14:
+            return 1
+        elif day <= 21:
+            return 2
+        elif day <= 27:
+            return 3
+        else:
+            return 4
 
-    # Calculate proportional weeks for days 8 to last_day
-    # Total available days: last_day - 7 (e.g., 31-day month has 24 days for weeks)
-    total_days = last_day - 7
-    days_per_week = total_days / 4
-
-    # Calculate which week this day falls into
-    # day 8 is the start (day_offset = 0)
-    day_offset = day - 8
-    week = int(day_offset / days_per_week) + 1
-
-    # Ensure week is between 1 and 4
-    if week > 4:
-        week = 4
-
-    return week
+    # All other months: fixed 7-day intervals
+    # Week 1: 8-14, Week 2: 15-21, Week 3: 22-28, Week 4: 29+
+    if day <= 14:
+        return 1
+    elif day <= 21:
+        return 2
+    elif day <= 28:
+        return 3
+    else:
+        return 4
 
 
 def process_ppg_excel_file(file_content, filename):
@@ -947,6 +998,14 @@ def sync_dor_data():
                     (month,)
                 )
             print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            # Deduplicate rows (DOR has 3 sub-files that may overlap on same account)
+            # Key = (division, account_name, date, budget_actual, week), keep last value
+            deduped = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # div, acct, date, budget_actual, week
+                deduped[key] = row
+            all_rows = list(deduped.values())
 
             # Insert new week data
             week_query = """

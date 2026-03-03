@@ -538,17 +538,17 @@ def start_scheduler():
         replace_existing=True
     )
 
-    # Refresh OneDrive token every 5 minutes to ensure it never expires
+    # Refresh OneDrive token every minute to ensure it never expires
     scheduler.add_job(
         refresh_onedrive_token,
-        trigger=IntervalTrigger(minutes=5),
+        trigger=IntervalTrigger(minutes=1),
         id='token_refresh',
-        name='Refresh OneDrive token every 5 minutes',
+        name='Refresh OneDrive token every minute',
         replace_existing=True
     )
 
     scheduler.start()
-    logger.info("Scheduler started - All stations syncing every hour, token refresh every 5 minutes")
+    logger.info("Scheduler started - All stations syncing every hour, token refresh every minute")
 
     # Immediately refresh token on startup
     try:
