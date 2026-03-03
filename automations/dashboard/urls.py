@@ -65,4 +65,10 @@ urlpatterns = [
     path('onedrive/check/', views.onedrive_check, name='onedrive_check'),
     path('powerbi/embed/', views.get_powerbi_embed, name='get_powerbi_embed'),
     path('powerbi/embed/save/', views.save_powerbi_embed, name='save_powerbi_embed'),
+    path('users/', views.user_list, name='user_list'),
+    path('users/add/', views.user_create, name='user_create'),
+    path('users/<int:user_id>/edit/', views.user_edit, name='user_edit'),
+    path('users/<int:user_id>/delete/', views.user_delete, name='user_delete'),
+    path('settings/', views.settings_view, name='settings'),
+    path('settings/save/', views.save_settings, name='save_settings'),
 ]

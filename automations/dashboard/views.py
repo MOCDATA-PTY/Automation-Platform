@@ -7,7 +7,8 @@ from django.db.models.functions import ExtractYear
 from django.db import OperationalError, ProgrammingError, connection
 from django.http import JsonResponse
 from django.conf import settings as django_settings
-from .models import TurnoverData, ProjectTask
+from .models import TurnoverData, ProjectTask, UserProfile
+from django.contrib.auth.models import User
 from .google_drive import sync_google_drive_data, get_progress, update_progress, get_last_sync
 from . import onedrive_sync
 import threading
@@ -1688,4 +1689,84 @@ def save_powerbi_embed(request):
     if not page_name:
         return JsonResponse({'status': 'error', 'message': 'page required'}, status=400)
     PowerBIEmbed.objects.update_or_create(page_name=page_name, defaults={'embed_url': embed_url})
+    return JsonResponse({'status': 'ok'})
+
+
+# ── User Management ────────────────────────────────────────────────────────────
+
+@login_required
+def user_list(request):
+    users = User.objects.all().order_by('date_joined')
+    return render(request, 'users.html', {'users': users, 'current_user': request.user})
+
+
+@login_required
+def user_create(request):
+    if request.method != 'POST':
+        return redirect('user_list')
+    username = request.POST.get('username', '').strip()
+    password = request.POST.get('password', '').strip()
+    if not username or not password:
+        messages.error(request, 'Username and password are required.')
+        return redirect('user_list')
+    if User.objects.filter(username=username).exists():
+        messages.error(request, f'Username "{username}" already exists.')
+        return redirect('user_list')
+    user = User.objects.create_user(username=username, password=password)
+    messages.success(request, f'User "{user.username}" created successfully.')
+    return redirect('user_list')
+
+
+@login_required
+def user_edit(request, user_id):
+    if request.method != 'POST':
+        return redirect('user_list')
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        messages.error(request, 'User not found.')
+        return redirect('user_list')
+    password = request.POST.get('password', '').strip()
+    if not password:
+        messages.error(request, 'New password cannot be empty.')
+        return redirect('user_list')
+    user.set_password(password)
+    user.save()
+    messages.success(request, f'Password for "{user.username}" updated.')
+    return redirect('user_list')
+
+
+@login_required
+def user_delete(request, user_id):
+    if request.method != 'POST':
+        return redirect('user_list')
+    if request.user.pk == user_id:
+        messages.error(request, 'You cannot delete your own account.')
+        return redirect('user_list')
+    try:
+        user = User.objects.get(pk=user_id)
+        username = user.username
+        user.delete()
+        messages.success(request, f'User "{username}" deleted.')
+    except User.DoesNotExist:
+        messages.error(request, 'User not found.')
+    return redirect('user_list')
+
+
+# ── Settings ───────────────────────────────────────────────────────────────────
+
+@login_required
+def settings_view(request):
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    return render(request, 'settings.html', {'dark_mode': profile.dark_mode})
+
+
+@login_required
+def save_settings(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error'}, status=405)
+    data = json.loads(request.body)
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    profile.dark_mode = bool(data.get('dark_mode', False))
+    profile.save()
     return JsonResponse({'status': 'ok'})
