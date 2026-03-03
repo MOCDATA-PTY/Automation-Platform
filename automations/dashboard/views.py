@@ -100,9 +100,6 @@ def home(request):
         condor_rows = 0
         condor_depts = 0
 
-    planner_total = ProjectTask.objects.count()
-    planner_in_progress = ProjectTask.objects.filter(status='in_progress').count()
-
     context = {
         'total_rows': total_rows,
         'branch_count': branch_count,
@@ -112,8 +109,6 @@ def home(request):
         'creditor_groups': creditor_groups,
         'condor_rows': condor_rows,
         'condor_depts': condor_depts,
-        'planner_total': planner_total,
-        'planner_in_progress': planner_in_progress,
         **station_rows,
     }
     return render(request, 'home.html', context)
