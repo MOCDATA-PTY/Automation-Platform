@@ -251,8 +251,11 @@
         .main-content {
             margin-left: 52px;
             flex: 1;
+            min-width: 0;
+            max-width: calc(100vw - 52px);
             padding: 24px 32px;
             min-height: 100vh;
+            overflow-x: hidden;
         }
 
         .page-header {
@@ -541,6 +544,11 @@
 
     <!-- Global responsive overrides — apply to all pages -->
     <style>
+    /* Prevent code blocks from expanding page width */
+    .query-box { max-width: 100%; overflow-x: auto; }
+    .query-code { display: block; }
+    .conn-string { word-break: break-all; max-width: 100%; }
+
     @media (max-width: 900px) {
         .grid-2, .grid-3 { grid-template-columns: 1fr !important; }
         .stats-row { gap: 10px; }
