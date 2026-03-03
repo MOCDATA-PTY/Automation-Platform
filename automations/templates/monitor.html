@@ -297,6 +297,67 @@
 
 @keyframes spin { to { transform: rotate(360deg); } }
 .btn-sync.syncing svg { animation: spin 1s linear infinite; }
+
+/* Row flash when data updates */
+.row-updated { animation: rowFlash 2s ease-out forwards; }
+@keyframes rowFlash {
+    0%   { background: rgba(16, 124, 16, 0.15); }
+    100% { background: transparent; }
+}
+
+/* 30s auto-refresh countdown bar */
+.refresh-bar-wrap { height: 3px; background: transparent; overflow: hidden; }
+.refresh-bar { height: 100%; background: #94BCCC; width: 100%; }
+
+/* Sync progress panel */
+.sync-panel {
+    background: #f0f6fa;
+    border: 1px solid #c0dae8;
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin-bottom: 16px;
+}
+.sync-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.sync-panel-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #054B70;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.sync-panel-label svg { animation: spin 1s linear infinite; }
+.sync-panel-count { font-size: 12px; color: #605e5c; font-weight: 500; }
+.sync-bar-outer {
+    height: 6px;
+    background: #d0e8f0;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+.sync-bar-inner {
+    height: 100%;
+    background: #054B70;
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.5s ease;
+}
+.sync-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.sync-chip {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #dce8f0;
+    color: #054B70;
+    transition: background 0.4s, color 0.4s;
+}
+.sync-chip.done { background: #107c10; color: #fff; }
 {% endblock %}
 
 {% block content %}
@@ -333,6 +394,21 @@
     </div>
 </div> <!-- /monitor-banner -->
 
+<!-- Sync progress panel (hidden until Sync All is clicked) -->
+<div class="sync-panel" id="sync-panel" style="display:none;">
+    <div class="sync-panel-header">
+        <span class="sync-panel-label">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="#054B70"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+            <span id="sync-panel-title">Syncing all stations...</span>
+        </span>
+        <span class="sync-panel-count" id="sync-panel-count">0 / {{ total_stations }}</span>
+    </div>
+    <div class="sync-bar-outer">
+        <div class="sync-bar-inner" id="sync-bar"></div>
+    </div>
+    <div class="sync-chips" id="sync-chips"></div>
+</div>
+
 <!-- Station table -->
 <div class="card">
     <div class="card-header">
@@ -341,12 +417,14 @@
             <span class="card-title">All Stations</span>
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
-            <span class="auto-refresh">
+            <span class="auto-refresh" id="refresh-label">
                 <svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
                 Auto-refreshes every 30s
             </span>
         </div>
     </div>
+    <!-- 30s countdown bar -->
+    <div class="refresh-bar-wrap"><div class="refresh-bar" id="refresh-bar"></div></div>
     <div style="overflow-x: auto;">
     <table class="monitor-table" id="station-table">
         <thead>
@@ -410,16 +488,165 @@
 
 {% block scripts %}
 <script>
+var TOTAL = {{ total_stations }};
+var lastSyncTimes = {};   // code -> "time|date" string
+var syncInProgress = false;
+var syncedSet = {};
+var fastPollTimer = null;
+var autoRefreshTimer = null;
+
 function getCookie(name) {
     var v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
     return v ? v[2] : null;
 }
 
+var SYNC_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
+
+/* ── Countdown bar ── */
+function startCountdown() {
+    var bar = document.getElementById('refresh-bar');
+    if (!bar) return;
+    bar.style.transition = 'none';
+    bar.style.width = '100%';
+    requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+            bar.style.transition = 'width 30s linear';
+            bar.style.width = '0%';
+        });
+    });
+}
+
+/* ── Build a single table row ── */
+function buildRow(s, flash) {
+    var statusLabel = s.status === 'healthy' ? 'Healthy' :
+                      s.status === 'stale'   ? 'Stale'   :
+                      s.status === 'error'   ? 'Error'   : 'Unknown';
+    var syncDisplay = s.last_sync
+        ? '<span class="sync-time"><span class="time-part">' + s.last_sync.time + '</span><span class="date-part">' + s.last_sync.date + '</span></span>'
+        : '<span style="color:#c8c6c4;font-size:12px;">Never</span>';
+    var timeAgoClass = s.status === 'stale' ? 'stale' : '';
+    var errClass = s.status === 'error' ? 'has-error' : '';
+    var rec = (s.records !== null && s.records !== undefined) ? Number(s.records).toLocaleString() : '--';
+    var trClass = flash ? ' class="row-updated"' : '';
+    return '<tr' + trClass + '>' +
+        '<td><a href="/' + s.code_lower + '/" class="station-link">' + s.code + '</a></td>' +
+        '<td><span class="status-badge ' + s.status + '"><span class="dot"></span>' + statusLabel + '</span></td>' +
+        '<td>' + syncDisplay + '</td>' +
+        '<td><span class="time-ago ' + timeAgoClass + '">' + (s.time_ago || '--') + '</span></td>' +
+        '<td><span class="records-count">' + rec + '</span></td>' +
+        '<td><span class="msg-text ' + errClass + '" title="' + (s.message || '') + '">' + (s.message || '--') + '</span></td>' +
+        '</tr>';
+}
+
+/* ── Process API response ── */
+function processData(data, isSyncPoll) {
+    document.getElementById('healthy-count').textContent = data.healthy_count;
+    document.getElementById('stale-count').textContent = data.stale_count;
+    document.getElementById('error-count').textContent = data.error_count;
+
+    var newTimes = {};
+    var updatedCodes = {};
+    data.stations.forEach(function(s) {
+        var key = s.last_sync ? (s.last_sync.time + '|' + s.last_sync.date) : '';
+        newTimes[s.code] = key;
+        if (isSyncPoll && lastSyncTimes[s.code] !== undefined && lastSyncTimes[s.code] !== key && key !== '') {
+            updatedCodes[s.code] = true;
+        }
+    });
+
+    var html = '';
+    data.stations.forEach(function(s) {
+        html += buildRow(s, !!updatedCodes[s.code]);
+    });
+    var tbody = document.querySelector('#station-table tbody');
+    tbody.innerHTML = html;
+
+    // Remove flash class after animation
+    if (Object.keys(updatedCodes).length) {
+        setTimeout(function() {
+            tbody.querySelectorAll('.row-updated').forEach(function(r) { r.classList.remove('row-updated'); });
+        }, 2000);
+    }
+
+    // If syncing, update chips and progress
+    if (isSyncPoll) {
+        Object.keys(updatedCodes).forEach(function(code) {
+            if (!syncedSet[code]) {
+                syncedSet[code] = true;
+                var chip = document.getElementById('chip-' + code);
+                if (chip) chip.className = 'sync-chip done';
+            }
+        });
+        var done = Object.keys(syncedSet).length;
+        var pct = Math.round(done / TOTAL * 100);
+        var bar = document.getElementById('sync-bar');
+        var cnt = document.getElementById('sync-panel-count');
+        var btn = document.getElementById('syncAllBtn');
+        if (bar) bar.style.width = pct + '%';
+        if (cnt) cnt.textContent = done + ' / ' + TOTAL;
+        if (btn) btn.innerHTML = SYNC_SVG + ' Syncing... (' + done + '/' + TOTAL + ')';
+        if (done >= TOTAL) finishSync(true);
+    }
+
+    lastSyncTimes = newTimes;
+}
+
+/* ── Finish sync ── */
+function finishSync(success) {
+    syncInProgress = false;
+    if (fastPollTimer) { clearInterval(fastPollTimer); fastPollTimer = null; }
+    var btn = document.getElementById('syncAllBtn');
+    var panel = document.getElementById('sync-panel');
+    var title = document.getElementById('sync-panel-title');
+    if (success) {
+        if (title) title.textContent = 'All stations synced!';
+        if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Done';
+    } else {
+        if (title) title.textContent = 'Sync timed out.';
+        if (btn) btn.innerHTML = 'Timed out';
+    }
+    setTimeout(function() {
+        if (panel) panel.style.display = 'none';
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove('syncing');
+            btn.innerHTML = SYNC_SVG + ' Sync All';
+        }
+        startCountdown();
+        scheduleAutoRefresh();
+    }, 3000);
+}
+
+/* ── Trigger Sync All ── */
 function syncAll() {
+    if (syncInProgress) return;
+    syncInProgress = true;
+    syncedSet = {};
+
     var btn = document.getElementById('syncAllBtn');
     btn.disabled = true;
     btn.classList.add('syncing');
-    btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg> Syncing...';
+    btn.innerHTML = SYNC_SVG + ' Syncing... (0/' + TOTAL + ')';
+
+    // Stop auto-refresh during sync
+    if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+    var refreshBar = document.getElementById('refresh-bar');
+    if (refreshBar) { refreshBar.style.transition = 'none'; refreshBar.style.width = '0%'; }
+
+    // Build station chips
+    var chips = document.getElementById('sync-chips');
+    if (chips) {
+        var codes = [];
+        document.querySelectorAll('#station-table .station-link').forEach(function(a) { codes.push(a.textContent.trim()); });
+        chips.innerHTML = codes.map(function(c) { return '<span id="chip-' + c + '" class="sync-chip">' + c + '</span>'; }).join('');
+    }
+    var bar = document.getElementById('sync-bar');
+    var cnt = document.getElementById('sync-panel-count');
+    var title = document.getElementById('sync-panel-title');
+    if (bar) bar.style.width = '0%';
+    if (cnt) cnt.textContent = '0 / ' + TOTAL;
+    if (title) title.textContent = 'Syncing all stations...';
+    document.getElementById('sync-panel').style.display = 'block';
 
     fetch('/monitor/sync-all/', {
         method: 'POST',
@@ -427,62 +654,54 @@ function syncAll() {
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        if (data.status === 'started') {
-            btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Started';
-            btn.classList.remove('syncing');
-        } else {
-            btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg> ' + (data.message || 'Error');
-            btn.classList.remove('syncing');
-            btn.disabled = false;
+        if (data.status !== 'started') {
+            if (btn) { btn.innerHTML = data.message || 'Error'; btn.disabled = false; btn.classList.remove('syncing'); }
+            document.getElementById('sync-panel').style.display = 'none';
+            syncInProgress = false;
+            scheduleAutoRefresh();
+            return;
         }
+        // Poll every 4s for progress, timeout after 2min
+        var elapsed = 0;
+        fastPollTimer = setInterval(function() {
+            elapsed += 4;
+            fetch('/monitor/api/')
+                .then(function(r) { return r.json(); })
+                .then(function(d) { processData(d, true); })
+                .catch(function() {});
+            if (elapsed >= 120) finishSync(false);
+        }, 4000);
     })
     .catch(function() {
-        btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg> Error';
-        btn.classList.remove('syncing');
-        btn.disabled = false;
-    })
-    .finally(function() {
-        setTimeout(function() {
-            btn.disabled = false;
-            btn.classList.remove('syncing');
-            btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg> Sync All';
-        }, 5000);
+        if (btn) { btn.innerHTML = 'Error'; btn.disabled = false; btn.classList.remove('syncing'); }
+        document.getElementById('sync-panel').style.display = 'none';
+        syncInProgress = false;
+        scheduleAutoRefresh();
     });
 }
 
-setInterval(function() {
-    fetch('/monitor/api/')
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            document.getElementById('healthy-count').textContent = data.healthy_count;
-            document.getElementById('stale-count').textContent = data.stale_count;
-            document.getElementById('error-count').textContent = data.error_count;
+/* ── Auto-refresh every 30s ── */
+function scheduleAutoRefresh() {
+    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    autoRefreshTimer = setInterval(function() {
+        if (!syncInProgress) {
+            fetch('/monitor/api/')
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    processData(d, false);
+                    startCountdown();
+                })
+                .catch(function(err) { console.error('Monitor refresh error:', err); });
+        }
+    }, 30000);
+}
 
-            var tbody = document.querySelector('#station-table tbody');
-            var html = '';
-            data.stations.forEach(function(s) {
-                var statusLabel = s.status === 'healthy' ? 'Healthy' :
-                                  s.status === 'stale'   ? 'Stale'   :
-                                  s.status === 'error'   ? 'Error'   : 'Unknown';
-                var syncDisplay = s.last_sync
-                    ? '<span class="sync-time"><span class="time-part">' + s.last_sync.time + '</span><span class="date-part">' + s.last_sync.date + '</span></span>'
-                    : '<span style="color:#c8c6c4;font-size:12px;">Never</span>';
-                var timeAgoClass = s.status === 'stale' ? 'stale' : '';
-                var errClass = s.status === 'error' ? 'has-error' : '';
-                var rec = (s.records !== null && s.records !== undefined) ? Number(s.records).toLocaleString() : '--';
-
-                html += '<tr>';
-                html += '<td><a href="/' + s.code_lower + '/" class="station-link">' + s.code + '</a></td>';
-                html += '<td><span class="status-badge ' + s.status + '"><span class="dot"></span>' + statusLabel + '</span></td>';
-                html += '<td>' + syncDisplay + '</td>';
-                html += '<td><span class="time-ago ' + timeAgoClass + '">' + (s.time_ago || '--') + '</span></td>';
-                html += '<td><span class="records-count">' + rec + '</span></td>';
-                html += '<td><span class="msg-text ' + errClass + '" title="' + (s.message || '') + '">' + (s.message || '--') + '</span></td>';
-                html += '</tr>';
-            });
-            tbody.innerHTML = html;
-        })
-        .catch(function(err) { console.error('Monitor refresh error:', err); });
-}, 30000);
+// Init: seed lastSyncTimes and start countdown
+fetch('/monitor/api/')
+    .then(function(r) { return r.json(); })
+    .then(function(d) { processData(d, false); })
+    .catch(function() {});
+startCountdown();
+scheduleAutoRefresh();
 </script>
 {% endblock %}
