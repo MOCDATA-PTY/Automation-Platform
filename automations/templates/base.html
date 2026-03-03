@@ -272,10 +272,73 @@
             font-weight: 400;
         }
 
+        /* Mobile hamburger button */
+        .mobile-menu-btn {
+            display: none;
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 1100;
+            background: #054B70;
+            border: none;
+            border-radius: 6px;
+            padding: 8px;
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+        }
+        .mobile-menu-btn svg { fill: #fff; width: 20px; height: 20px; }
+
+        /* Mobile overlay */
+        .mobile-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 999;
+        }
+        .mobile-overlay.active { display: block; }
+
+        /* Responsive breakpoints */
+        @media (max-width: 768px) {
+            .mobile-menu-btn { display: flex; }
+
+            .sidebar {
+                transform: translateX(-100%);
+                z-index: 1000;
+                width: 220px !important;
+                transition: transform 0.25s ease, width 0s;
+            }
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            /* Show labels in mobile open state */
+            .sidebar.mobile-open .label,
+            .sidebar.mobile-open .sidebar-brand-wrap { display: block !important; opacity: 1 !important; }
+            .sidebar.mobile-open .sidebar-logo { width: 32px; height: 32px; }
+
+            .main-content {
+                margin-left: 0 !important;
+                padding: 56px 16px 16px;
+            }
+        }
+
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .main-content {
+                padding: 20px 20px;
+            }
+        }
+
         {% block extra_styles %}{% endblock %}
     </style>
 </head>
 <body>
+    <!-- Mobile hamburger -->
+    <button class="mobile-menu-btn" onclick="toggleMobileSidebar()" aria-label="Menu">
+        <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+    </button>
+    <div class="mobile-overlay" id="mobile-overlay" onclick="closeMobileSidebar()"></div>
+
     <!-- Sidebar -->
     <aside class="sidebar">
         <div class="sidebar-header">
@@ -477,5 +540,22 @@
     </script>
 
     {% block scripts %}{% endblock %}
+
+    <script>
+    function toggleMobileSidebar() {
+        document.querySelector('.sidebar').classList.toggle('mobile-open');
+        document.getElementById('mobile-overlay').classList.toggle('active');
+    }
+    function closeMobileSidebar() {
+        document.querySelector('.sidebar').classList.remove('mobile-open');
+        document.getElementById('mobile-overlay').classList.remove('active');
+    }
+    // Close sidebar when a nav link is tapped on mobile
+    document.querySelectorAll('.sidebar-menu a, .sidebar-footer a').forEach(function(link) {
+        link.addEventListener('click', function() {
+            if (window.innerWidth <= 768) closeMobileSidebar();
+        });
+    });
+    </script>
 </body>
 </html>

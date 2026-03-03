@@ -114,6 +114,23 @@
     gap: 12px;
 }
 
+@media (max-width: 768px) {
+    .page-banner { padding: 20px 16px 18px; }
+    .banner-title { font-size: 20px; }
+    .banner-subtitle { margin-bottom: 16px; }
+    .banner-stats { gap: 16px; }
+    .banner-stat-num { font-size: 20px; }
+    .projects-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .project-card { padding: 14px 14px; }
+    .stat-value { font-size: 15px; }
+}
+
+@media (max-width: 480px) {
+    .projects-grid { grid-template-columns: 1fr; }
+    .banner-stats { gap: 12px; }
+    .page-banner { padding: 16px 14px; }
+}
+
 .project-card {
     background: #fff;
     border: 1px solid #edebe9;
