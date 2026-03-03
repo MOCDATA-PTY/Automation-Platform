@@ -539,6 +539,36 @@
     })();
     </script>
 
+    <!-- Global responsive overrides — apply to all pages -->
+    <style>
+    @media (max-width: 900px) {
+        .grid-2, .grid-3 { grid-template-columns: 1fr !important; }
+        .stats-row { gap: 10px; }
+        .stat-card { min-width: 0; flex: 1 1 calc(50% - 10px); }
+        .page-title { font-size: 20px !important; }
+        .page-subtitle { font-size: 12px !important; }
+    }
+    @media (max-width: 600px) {
+        .stat-card { flex: 1 1 100%; }
+        .stat-value { font-size: 18px !important; }
+        .card-header { flex-wrap: wrap; gap: 6px; }
+        .sync-row { flex-direction: column; align-items: flex-start !important; gap: 10px; }
+        .info-row { flex-direction: column; gap: 2px; }
+        .info-value { text-align: left !important; }
+        .conn-string { font-size: 11px !important; word-break: break-all; }
+        .query-code { font-size: 11px !important; }
+        .btn { font-size: 12px !important; padding: 7px 12px !important; }
+        .card-body { padding: 12px 14px !important; }
+        .card-header { padding: 12px 14px !important; }
+        .page-header { margin-bottom: 16px !important; }
+        table { min-width: 500px; }
+        .powerbi-header { flex-wrap: wrap; gap: 8px; }
+        .powerbi-actions { flex-wrap: wrap; }
+        #pbi-config-panel > div { flex-direction: column !important; }
+        #pbi-url-input { width: 100% !important; }
+    }
+    </style>
+
     {% block scripts %}{% endblock %}
 
     <script>
