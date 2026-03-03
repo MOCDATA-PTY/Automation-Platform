@@ -305,14 +305,6 @@
                     <span class="label">Sync Monitor</span>
                 </a>
             </li>
-            <li>
-                <a href="{% url 'project_planner' %}" class="{% if request.resolver_match.url_name == 'project_planner' %}active{% endif %}">
-                    <span class="icon">
-                        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
-                    </span>
-                    <span class="label">Planner</span>
-                </a>
-            </li>
         </ul>
 
         <div class="sidebar-footer">
@@ -328,7 +320,161 @@
     <!-- Main Content -->
     <main class="main-content">
         {% block content %}{% endblock %}
+
+        {% with url_name=request.resolver_match.url_name %}
+        {% if url_name not in 'home,sync_monitor,login,logout' %}
+        <div class="powerbi-section" id="powerbi-section">
+            <div class="powerbi-header">
+                <div class="powerbi-title">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="#f2c811"><path d="M21 3H3C1.9 3 1 3.9 1 5v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-9-2h2v-5h-2v5zm-4 0h2V7h-2v10zm8 0h2v-8h-2v8z"/></svg>
+                    <span>Power BI Report</span>
+                </div>
+                <div class="powerbi-actions">
+                    <button class="powerbi-btn" id="pbi-configure-btn" onclick="togglePBIConfig()">
+                        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                        Configure
+                    </button>
+                    <button class="powerbi-btn powerbi-toggle-btn" onclick="togglePBIFrame()" id="pbi-toggle-btn">
+                        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M7 14l5-5 5 5z"/></svg>
+                        Hide
+                    </button>
+                </div>
+            </div>
+
+            <div id="pbi-config-panel" style="display:none; padding:12px 16px; background:#f8f9fa; border-bottom:1px solid #e0e0e0;">
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="text" id="pbi-url-input" placeholder="Paste Power BI embed URL here (iframe src)..."
+                        style="flex:1; padding:8px 12px; border:1px solid #ccc; border-radius:6px; font-size:13px;">
+                    <button onclick="savePBIEmbed()" style="padding:8px 16px; background:#054B70; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Save</button>
+                    <button onclick="clearPBIEmbed()" style="padding:8px 16px; background:#dc3545; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Clear</button>
+                </div>
+                <div id="pbi-save-msg" style="margin-top:6px; font-size:12px; color:#28a745; display:none;">Saved successfully.</div>
+            </div>
+
+            <div id="pbi-frame-wrap">
+                <div id="pbi-placeholder" style="display:flex; align-items:center; justify-content:center; height:120px; color:#999; font-size:14px; gap:8px;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="#ccc"><path d="M21 3H3C1.9 3 1 3.9 1 5v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-9-2h2v-5h-2v5zm-4 0h2V7h-2v10zm8 0h2v-8h-2v8z"/></svg>
+                    No Power BI report configured. Click Configure to add one.
+                </div>
+                <iframe id="pbi-iframe" src="" frameborder="0" allowfullscreen="true"
+                    style="display:none; width:100%; height:600px; border:none;"></iframe>
+            </div>
+        </div>
+        {% endif %}
+        {% endwith %}
     </main>
+
+    <style>
+    .powerbi-section {
+        margin: 24px 0 0 0;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #fff;
+    }
+    .powerbi-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: #054B70;
+        color: #fff;
+    }
+    .powerbi-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 14px;
+    }
+    .powerbi-actions { display: flex; gap: 8px; }
+    .powerbi-btn {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 12px;
+        background: rgba(255,255,255,0.15);
+        border: 1px solid rgba(255,255,255,0.3);
+        border-radius: 5px;
+        color: #fff;
+        font-size: 12px;
+        cursor: pointer;
+    }
+    .powerbi-btn:hover { background: rgba(255,255,255,0.25); }
+    </style>
+
+    <script>
+    (function() {
+        const PAGE = '{{ request.resolver_match.url_name }}';
+        const iframe = document.getElementById('pbi-iframe');
+        const placeholder = document.getElementById('pbi-placeholder');
+        const urlInput = document.getElementById('pbi-url-input');
+
+        // Load saved embed URL on page load
+        if (PAGE && iframe) {
+            fetch('/powerbi/embed/?page=' + PAGE)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.embed_url) {
+                        iframe.src = data.embed_url;
+                        iframe.style.display = 'block';
+                        if (placeholder) placeholder.style.display = 'none';
+                        if (urlInput) urlInput.value = data.embed_url;
+                    }
+                });
+        }
+
+        window.togglePBIConfig = function() {
+            const panel = document.getElementById('pbi-config-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        };
+
+        window.togglePBIFrame = function() {
+            const wrap = document.getElementById('pbi-frame-wrap');
+            const btn = document.getElementById('pbi-toggle-btn');
+            if (wrap.style.display === 'none') {
+                wrap.style.display = 'block';
+                btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M7 14l5-5 5 5z"/></svg> Hide';
+            } else {
+                wrap.style.display = 'none';
+                btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M7 10l5 5 5-5z"/></svg> Show';
+            }
+        };
+
+        window.savePBIEmbed = function() {
+            const url = urlInput ? urlInput.value.trim() : '';
+            fetch('/powerbi/embed/save/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+                body: JSON.stringify({page: PAGE, embed_url: url})
+            }).then(r => r.json()).then(data => {
+                if (data.status === 'ok') {
+                    if (url) {
+                        iframe.src = url;
+                        iframe.style.display = 'block';
+                        if (placeholder) placeholder.style.display = 'none';
+                    } else {
+                        iframe.src = '';
+                        iframe.style.display = 'none';
+                        if (placeholder) placeholder.style.display = 'flex';
+                    }
+                    const msg = document.getElementById('pbi-save-msg');
+                    if (msg) { msg.style.display = 'block'; setTimeout(() => msg.style.display = 'none', 3000); }
+                }
+            });
+        };
+
+        window.clearPBIEmbed = function() {
+            if (urlInput) urlInput.value = '';
+            window.savePBIEmbed();
+        };
+
+        function getCookie(name) {
+            let v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+            return v ? v[2] : null;
+        }
+    })();
+    </script>
 
     {% block scripts %}{% endblock %}
 </body>

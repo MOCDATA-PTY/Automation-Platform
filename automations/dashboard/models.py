@@ -34,6 +34,18 @@ class ProjectTask(models.Model):
         return self.title
 
 
+class PowerBIEmbed(models.Model):
+    page_name = models.CharField(max_length=50, unique=True)
+    embed_url = models.TextField(blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'powerbi_embed'
+
+    def __str__(self):
+        return self.page_name
+
+
 class TurnoverData(models.Model):
     debtor = models.CharField(max_length=100)
     debtor_name = models.CharField(max_length=255)

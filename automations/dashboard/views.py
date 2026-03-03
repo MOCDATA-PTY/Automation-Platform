@@ -1667,144 +1667,30 @@ def sync_all(request):
     return JsonResponse({'status': 'started'})
 
 
-# ── Project Planner ──────────────────────────────────────────────────────────
-
-KANBAN_COLUMNS = [
-    ('backlog',     'Backlog'),
-    ('todo',        'To Do'),
-    ('in_progress', 'In Progress'),
-    ('review',      'Review'),
-    ('done',        'Done'),
-]
-
+# ── Power BI Embed ────────────────────────────────────────────────────────────
 
 @login_required
-def project_planner(request):
-    if request.method == 'POST':
-        title = request.POST.get('title', '').strip()
-        if title:
-            ProjectTask.objects.create(
-                title=title,
-                description=request.POST.get('description', '').strip(),
-                status=request.POST.get('status', 'backlog'),
-                priority=request.POST.get('priority', 'medium'),
-                start_date=request.POST.get('start_date') or None,
-                end_date=request.POST.get('end_date') or None,
-            )
-        return JsonResponse({'status': 'ok'})
-
-    columns = []
-    for key, label in KANBAN_COLUMNS:
-        tasks = list(ProjectTask.objects.filter(status=key, parent=None).values(
-            'id', 'title', 'description', 'priority', 'created_at', 'start_date', 'end_date'
-        ))
-        for t in tasks:
-            t['created_at'] = t['created_at'].strftime('%b %d')
-            t['start_date'] = t['start_date'].isoformat() if t['start_date'] else None
-            t['end_date'] = t['end_date'].isoformat() if t['end_date'] else None
-        columns.append({'key': key, 'label': label, 'tasks': tasks})
-
-    total = ProjectTask.objects.count()
-    in_progress = ProjectTask.objects.filter(status='in_progress').count()
-    done = ProjectTask.objects.filter(status='done').count()
-
-    return render(request, 'project_planner.html', {
-        'columns': columns,
-        'total': total,
-        'in_progress': in_progress,
-        'done': done,
-    })
-
-
-@login_required
-def planner_api(request):
-    """JSON API returning 3-level hierarchy: projects → tasks → subtasks for the Gantt chart."""
-    def serialize(t):
-        return {
-            'id': t.id,
-            'title': t.title,
-            'description': t.description,
-            'status': t.status,
-            'priority': t.priority,
-            'start_date': t.start_date.isoformat() if t.start_date else None,
-            'end_date': t.end_date.isoformat() if t.end_date else None,
-        }
-
-    from collections import defaultdict, OrderedDict
-
-    top_level = ProjectTask.objects.filter(parent=None).prefetch_related('subtasks').order_by('start_date', 'created_at')
-
-    # Group by project_name, preserving insertion order
-    proj_map = OrderedDict()
-    for t in top_level:
-        key = t.project_name.strip() or 'Uncategorized'
-        if key not in proj_map:
-            proj_map[key] = []
-        proj_map[key].append(t)
-
-    projects = []
-    for proj_name, task_qs in proj_map.items():
-        task_starts = [t.start_date for t in task_qs if t.start_date]
-        task_ends   = [t.end_date   for t in task_qs if t.end_date]
-        proj_start  = min(task_starts).isoformat() if task_starts else None
-        proj_end    = max(task_ends).isoformat()   if task_ends   else None
-
-        statuses = [t.status for t in task_qs]
-        if all(s == 'done' for s in statuses):
-            proj_status = 'done'
-        elif any(s in ('in_progress', 'review') for s in statuses):
-            proj_status = 'in_progress'
-        else:
-            proj_status = 'todo'
-
-        task_list = []
-        for t in task_qs:
-            td = serialize(t)
-            td['subtasks'] = [serialize(s) for s in t.subtasks.all()]
-            task_list.append(td)
-
-        projects.append({
-            'name': proj_name,
-            'status': proj_status,
-            'start_date': proj_start,
-            'end_date': proj_end,
-            'tasks': task_list,
-        })
-
-    total = ProjectTask.objects.count()
-    in_progress = ProjectTask.objects.filter(status='in_progress').count()
-    done = ProjectTask.objects.filter(status='done').count()
-    return JsonResponse({'projects': projects, 'total': total, 'in_progress': in_progress, 'done': done})
-
-
-@login_required
-def task_update(request, task_id):
-    if request.method != 'POST':
-        return JsonResponse({'status': 'error'}, status=405)
+def get_powerbi_embed(request):
+    """Return the saved Power BI embed URL for a given page."""
+    from .models import PowerBIEmbed
+    page_name = request.GET.get('page', '')
     try:
-        task = ProjectTask.objects.get(pk=task_id)
-        data = json.loads(request.body)
-        if 'status' in data:
-            task.status = data['status']
-        if 'title' in data:
-            task.title = data['title'].strip() or task.title
-        if 'description' in data:
-            task.description = data['description'].strip()
-        if 'priority' in data:
-            task.priority = data['priority']
-        if 'start_date' in data:
-            task.start_date = data['start_date'] or None
-        if 'end_date' in data:
-            task.end_date = data['end_date'] or None
-        task.save()
-        return JsonResponse({'status': 'ok'})
-    except ProjectTask.DoesNotExist:
-        return JsonResponse({'status': 'not found'}, status=404)
+        obj = PowerBIEmbed.objects.get(page_name=page_name)
+        return JsonResponse({'embed_url': obj.embed_url})
+    except PowerBIEmbed.DoesNotExist:
+        return JsonResponse({'embed_url': ''})
 
 
 @login_required
-def task_delete(request, task_id):
+def save_powerbi_embed(request):
+    """Save or update the Power BI embed URL for a given page."""
     if request.method != 'POST':
         return JsonResponse({'status': 'error'}, status=405)
-    ProjectTask.objects.filter(pk=task_id).delete()
+    from .models import PowerBIEmbed
+    data = json.loads(request.body)
+    page_name = data.get('page', '')
+    embed_url = data.get('embed_url', '').strip()
+    if not page_name:
+        return JsonResponse({'status': 'error', 'message': 'page required'}, status=400)
+    PowerBIEmbed.objects.update_or_create(page_name=page_name, defaults={'embed_url': embed_url})
     return JsonResponse({'status': 'ok'})
