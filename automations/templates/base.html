@@ -593,6 +593,49 @@
     .query-code { display: block; }
     .conn-string { word-break: break-all; max-width: 100%; }
 
+    /* ── Dark mode global overrides (loaded after block extra_styles so they win) ── */
+    [data-theme="dark"] .page-banner { background: #0f1923; }
+    [data-theme="dark"] .banner-eyebrow { color: rgba(255,255,255,0.35); }
+    [data-theme="dark"] .banner-subtitle { color: rgba(255,255,255,0.4); }
+    [data-theme="dark"] .banner-stat-label { color: rgba(255,255,255,0.35); }
+
+    [data-theme="dark"] .card { background: var(--surface); border-color: var(--border); }
+    [data-theme="dark"] .card-header { border-color: var(--border); }
+    [data-theme="dark"] .card-title { color: var(--text-primary); }
+    [data-theme="dark"] .card-body { color: var(--text-primary); }
+
+    [data-theme="dark"] .stat-card { background: var(--surface); border-color: var(--border); }
+    [data-theme="dark"] .stat-label { color: var(--text-secondary); }
+    [data-theme="dark"] .stat-value { color: #6cb4d8; }
+
+    [data-theme="dark"] .project-card { background: var(--surface); border-color: var(--border); }
+    [data-theme="dark"] .project-title { color: var(--text-primary); }
+    [data-theme="dark"] .project-description { color: var(--text-secondary); }
+    [data-theme="dark"] .project-stats { border-color: var(--border); }
+    [data-theme="dark"] .project-icon { background: var(--surface2); }
+
+    [data-theme="dark"] .section-label { color: var(--text-muted); }
+    [data-theme="dark"] .page-subtitle { color: var(--text-secondary); }
+
+    [data-theme="dark"] .info-row { border-color: var(--border); }
+    [data-theme="dark"] .info-label { color: var(--text-secondary); }
+    [data-theme="dark"] .info-value { color: var(--text-primary); }
+
+    [data-theme="dark"] .sync-time { color: var(--text-primary); }
+    [data-theme="dark"] .sync-date { color: var(--text-secondary); }
+    [data-theme="dark"] .sync-schedule { color: var(--text-secondary); }
+    [data-theme="dark"] .sync-badge { background: #1b3a1b; color: #6fcf6f; }
+    [data-theme="dark"] .sync-status { background: var(--surface2); color: var(--text-secondary); }
+
+    [data-theme="dark"] .monitor-card { background: var(--surface); border-color: var(--border); }
+    [data-theme="dark"] .monitor-table th { color: var(--text-muted); border-color: var(--border); background: var(--surface2); }
+    [data-theme="dark"] .monitor-table td { color: var(--text-primary); border-color: var(--border); }
+    [data-theme="dark"] .monitor-table tr:hover td { background: var(--surface2); }
+
+    [data-theme="dark"] .powerbi-section { background: var(--surface); border-color: var(--border); }
+    [data-theme="dark"] #pbi-config-panel { background: var(--surface2); border-color: var(--border); }
+    [data-theme="dark"] #pbi-url-input { background: var(--bg); color: var(--text-primary); border-color: var(--border); }
+
     @media (max-width: 900px) {
         .grid-2, .grid-3 { grid-template-columns: 1fr !important; }
         .stats-row { gap: 10px; }
