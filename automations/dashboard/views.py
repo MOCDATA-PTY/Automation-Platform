@@ -1770,3 +1770,35 @@ def save_settings(request):
     profile.dark_mode = bool(data.get('dark_mode', False))
     profile.save()
     return JsonResponse({'status': 'ok'})
+
+
+# ── US-EU List ─────────────────────────────────────────────────────────────────
+
+@login_required
+def useu_list(request):
+    import csv
+    csv_path = os.path.join(django_settings.BASE_DIR, 'US-EU List.csv')
+    rows = []
+    active_count = 0
+    faulty_count = 0
+    try:
+        with open(csv_path, 'r', encoding='utf-8-sig') as f:
+            reader = csv.reader(f)
+            next(reader)  # skip header
+            for row in reader:
+                rows.append(row)
+                status = row[10].strip() if len(row) > 10 else ''
+                if status == 'Active':
+                    active_count += 1
+                elif status == 'Faulty Data':
+                    faulty_count += 1
+    except FileNotFoundError:
+        pass
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    return render(request, 'useu_list.html', {
+        'rows_json': json.dumps(rows),
+        'total_rows': len(rows),
+        'active_count': active_count,
+        'faulty_count': faulty_count,
+        'dark_mode': profile.dark_mode,
+    })

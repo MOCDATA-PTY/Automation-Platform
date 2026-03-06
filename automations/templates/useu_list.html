@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}US-EU List — Automations{% endblock %}
+
+{% block extra_styles %}
+.page-banner {
+    background: linear-gradient(135deg, #054B70 0%, #0a7ab5 100%);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    color: #fff;
+}
+.banner-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 4px;
+}
+.banner-title {
+    font-size: 22px;
+    font-weight: 700;
+}
+.banner-subtitle {
+    font-size: 13px;
+    color: rgba(255,255,255,0.65);
+    margin-top: 2px;
+}
+.banner-stats {
+    display: flex;
+    gap: 32px;
+    margin-top: 16px;
+}
+.banner-stat-value {
+    font-size: 22px;
+    font-weight: 700;
+}
+.banner-stat-label {
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.list-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.list-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.list-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.search-box {
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--surface);
+    color: var(--text-primary);
+    width: 260px;
+}
+.search-box:focus {
+    outline: none;
+    border-color: #054B70;
+}
+.table-wrap {
+    overflow-x: auto;
+}
+.list-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.list-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+.list-table th:hover {
+    color: var(--text-primary);
+}
+.list-table th .sort-arrow {
+    margin-left: 4px;
+    font-size: 10px;
+    opacity: 0.4;
+}
+.list-table th.sorted .sort-arrow {
+    opacity: 1;
+}
+.list-table td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+.list-table tbody tr:hover td {
+    background: rgba(5, 75, 112, 0.04);
+}
+.status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.status-active {
+    background: #e6f4ea;
+    color: #1e7e34;
+}
+.status-faulty {
+    background: #fde8e8;
+    color: #c0392b;
+}
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.pagination-buttons {
+    display: flex;
+    gap: 4px;
+}
+.pagination-buttons button {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-primary);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+}
+.pagination-buttons button:hover {
+    background: var(--surface2);
+}
+.pagination-buttons button.active {
+    background: #054B70;
+    color: #fff;
+    border-color: #054B70;
+}
+.pagination-buttons button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+.per-page-select {
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 12px;
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .status-active { background: #1b3a1b; color: #6fcf6f; }
+[data-theme="dark"] .status-faulty { background: #3a1b1b; color: #f06f6f; }
+[data-theme="dark"] .list-table tbody tr:hover td { background: rgba(108, 180, 216, 0.06); }
+{% endblock %}
+
+{% block content %}
+<div class="page-banner">
+    <div class="banner-eyebrow">Database</div>
+    <div class="banner-title">US-EU Contact List</div>
+    <div class="banner-subtitle">Organizational contacts with touchpoint tracking</div>
+    <div class="banner-stats">
+        <div>
+            <div class="banner-stat-value">{{ total_rows|default:"0" }}</div>
+            <div class="banner-stat-label">Total Contacts</div>
+        </div>
+        <div>
+            <div class="banner-stat-value">{{ active_count|default:"0" }}</div>
+            <div class="banner-stat-label">Active</div>
+        </div>
+        <div>
+            <div class="banner-stat-value">{{ faulty_count|default:"0" }}</div>
+            <div class="banner-stat-label">Faulty Data</div>
+        </div>
+    </div>
+</div>
+
+<div class="list-card">
+    <div class="list-card-header">
+        <div class="list-card-title">Contacts</div>
+        <input type="text" class="search-box" id="searchBox" placeholder="Search by name, email, org...">
+    </div>
+    <div class="table-wrap">
+        <table class="list-table" id="listTable">
+            <thead>
+                <tr>
+                    <th data-col="0">Org. Name <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="1">Default <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="2">Contact Name <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="3">Attach <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="4">Phone <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="5">Email <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="6">Touchpoint 1 <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="7">TP1 Sent On <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="8">Touchpoint 2 <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="9">Last Touch <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="10">Status <span class="sort-arrow">&#9650;</span></th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+    <div class="pagination">
+        <div>
+            Showing <span id="showStart">0</span>–<span id="showEnd">0</span> of <span id="showTotal">0</span>
+            &nbsp; | &nbsp; Per page:
+            <select class="per-page-select" id="perPage" onchange="changePerPage()">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="250">250</option>
+                <option value="500">500</option>
+            </select>
+        </div>
+        <div class="pagination-buttons" id="pagBtns"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const allData = {{ rows_json|safe }};
+    let filtered = allData;
+    let perPage = 100;
+    let currentPage = 1;
+    let sortCol = -1;
+    let sortAsc = true;
+
+    const tbody = document.getElementById('tableBody');
+    const pagBtns = document.getElementById('pagBtns');
+    const searchBox = document.getElementById('searchBox');
+
+    function statusBadge(val) {
+        const v = (val || '').trim();
+        if (v === 'Active') return '<span class="status-badge status-active">Active</span>';
+        if (v === 'Faulty Data') return '<span class="status-badge status-faulty">Faulty Data</span>';
+        return v;
+    }
+
+    function renderPage() {
+        const start = (currentPage - 1) * perPage;
+        const end = Math.min(start + perPage, filtered.length);
+        let html = '';
+        for (let i = start; i < end; i++) {
+            const r = filtered[i];
+            html += '<tr>';
+            for (let c = 0; c < r.length - 1; c++) {
+                if (c === 10) html += '<td>' + statusBadge(r[c]) + '</td>';
+                else html += '<td>' + (r[c] || '') + '</td>';
+            }
+            html += '</tr>';
+        }
+        tbody.innerHTML = html;
+        document.getElementById('showStart').textContent = filtered.length ? start + 1 : 0;
+        document.getElementById('showEnd').textContent = end;
+        document.getElementById('showTotal').textContent = filtered.length;
+        renderPagination();
+    }
+
+    function renderPagination() {
+        const totalPages = Math.ceil(filtered.length / perPage) || 1;
+        let html = '';
+        html += '<button ' + (currentPage === 1 ? 'disabled' : '') + ' onclick="goPage(' + (currentPage - 1) + ')">&laquo;</button>';
+        let pages = [];
+        if (totalPages <= 7) {
+            for (let i = 1; i <= totalPages; i++) pages.push(i);
+        } else {
+            pages.push(1);
+            if (currentPage > 3) pages.push('...');
+            for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) pages.push(i);
+            if (currentPage < totalPages - 2) pages.push('...');
+            pages.push(totalPages);
+        }
+        pages.forEach(p => {
+            if (p === '...') html += '<button disabled>...</button>';
+            else html += '<button class="' + (p === currentPage ? 'active' : '') + '" onclick="goPage(' + p + ')">' + p + '</button>';
+        });
+        html += '<button ' + (currentPage === totalPages ? 'disabled' : '') + ' onclick="goPage(' + (currentPage + 1) + ')">&raquo;</button>';
+        pagBtns.innerHTML = html;
+    }
+
+    window.goPage = function(p) {
+        const totalPages = Math.ceil(filtered.length / perPage) || 1;
+        if (p < 1 || p > totalPages) return;
+        currentPage = p;
+        renderPage();
+        document.querySelector('.list-card').scrollIntoView({behavior: 'smooth', block: 'start'});
+    };
+
+    window.changePerPage = function() {
+        perPage = parseInt(document.getElementById('perPage').value);
+        currentPage = 1;
+        renderPage();
+    };
+
+    // Search
+    let searchTimer;
+    searchBox.addEventListener('input', function() {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(function() {
+            const q = searchBox.value.trim().toLowerCase();
+            if (!q) { filtered = allData; }
+            else {
+                filtered = allData.filter(r => r.some(cell => (cell || '').toLowerCase().includes(q)));
+            }
+            currentPage = 1;
+            renderPage();
+        }, 300);
+    });
+
+    // Sort
+    document.querySelectorAll('.list-table th[data-col]').forEach(th => {
+        th.addEventListener('click', function() {
+            const col = parseInt(this.dataset.col);
+            if (sortCol === col) sortAsc = !sortAsc;
+            else { sortCol = col; sortAsc = true; }
+            document.querySelectorAll('.list-table th').forEach(h => h.classList.remove('sorted'));
+            this.classList.add('sorted');
+            this.querySelector('.sort-arrow').innerHTML = sortAsc ? '&#9650;' : '&#9660;';
+            filtered.sort((a, b) => {
+                const va = (a[col] || '').toLowerCase();
+                const vb = (b[col] || '').toLowerCase();
+                if (va < vb) return sortAsc ? -1 : 1;
+                if (va > vb) return sortAsc ? 1 : -1;
+                return 0;
+            });
+            currentPage = 1;
+            renderPage();
+        });
+    });
+
+    renderPage();
+})();
+</script>
+{% endblock %}

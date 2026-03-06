@@ -71,4 +71,5 @@ urlpatterns = [
     path('users/<int:user_id>/delete/', views.user_delete, name='user_delete'),
     path('settings/', views.settings_view, name='settings'),
     path('settings/save/', views.save_settings, name='save_settings'),
+    path('useu-list/', views.useu_list, name='useu_list'),
 ]
