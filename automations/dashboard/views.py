@@ -1907,6 +1907,18 @@ def useu_update_cell(request):
 
 _send_all_progress = {}  # in-memory progress tracker
 
+
+@login_required
+def send_all_cancel(request):
+    """Cancel a running send-all job."""
+    job_id = request.GET.get('job_id', '') or request.POST.get('job_id', '')
+    progress = _send_all_progress.get(job_id)
+    if progress:
+        progress['cancel'] = True
+        return JsonResponse({'ok': True})
+    return JsonResponse({'ok': False, 'error': 'Job not found'})
+
+
 @login_required
 def send_all_touchpoint(request):
     """Send a touchpoint email to all Active contacts with empty TP sent date."""
@@ -1950,189 +1962,177 @@ def send_all_touchpoint(request):
         'failed': 0,
         'current': '',
         'done': False,
+        'cancel': False,
+        'last_error': '',
         'results': [],
     }
 
     import threading
-    import concurrent.futures
 
     def _do_send():
-        token = _get_graph_token()
-        if not token:
-            _send_all_progress[job_id]['done'] = True
-            _send_all_progress[job_id]['error'] = 'Failed to get Graph API token'
-            return
+        prog = _send_all_progress[job_id]
+        try:
+            token = _get_graph_token()
+            if not token:
+                prog['done'] = True
+                prog['last_error'] = 'Failed to get Graph API token'
+                return
 
-        # Token auto-refresh for long-running jobs (tokens expire after 1 hour)
-        token_lock = threading.Lock()
-        token_data = {'value': token, 'obtained': time.time()}
+            token_obtained = time.time()
 
-        def _fresh_token():
-            with token_lock:
-                if time.time() - token_data['obtained'] > 2700:  # refresh after 45 min
-                    new_tok = _get_graph_token()
-                    if new_tok:
-                        token_data['value'] = new_tok
-                        token_data['obtained'] = time.time()
-                return token_data['value']
+            body_content = template.body_html if template.body_html else template.body
+            content_type = 'HTML' if template.body_html else 'Text'
 
-        body_content = template.body_html if template.body_html else template.body
-        content_type = 'HTML' if template.body_html else 'Text'
+            # Replace Google Drive signature URL with hosted static URL
+            # (Using a URL instead of inline CID saves ~57KB per email,
+            #  preventing Microsoft Graph IncomingBytes throttle)
+            SIG_URL = 'https://workspace.moc-pty.com/static/signature_waldo.png'
+            if content_type == 'HTML':
+                body_content = re.sub(
+                    r'https://drive\.google\.com/thumbnail\?id=[^"\'&]+(?:&amp;[^"\']*|&[^"\']*)*',
+                    SIG_URL,
+                    body_content,
+                    flags=re.IGNORECASE
+                )
+                # Also replace any leftover cid:signature_waldo from previous versions
+                body_content = body_content.replace('cid:signature_waldo', SIG_URL)
 
-        # Embed signature as inline CID attachment instead of external URL
-        sig_inline = None
-        if content_type == 'HTML':
-            body_content = re.sub(
-                r'https://drive\.google\.com/thumbnail\?id=[^"\'&]+(?:&amp;[^"\']*|&[^"\']*)*',
-                r'cid:signature_waldo',
-                body_content,
-                flags=re.IGNORECASE
-            )
-            sig_path = os.path.join(django_settings.BASE_DIR, 'static', 'signature_waldo.png')
-            if os.path.isfile(sig_path):
-                with open(sig_path, 'rb') as sf:
-                    sig_inline = {
+            # Build attachment once
+            att_data = None
+            if template.attachment:
+                try:
+                    att_path = template.attachment.path
+                    with open(att_path, 'rb') as f:
+                        att_bytes = f.read()
+                    raw_name = os.path.basename(att_path)
+                    name_part, ext = os.path.splitext(raw_name)
+                    att_name = name_part.replace('_', ' ').replace('-', ' ')
+                    att_name = ' '.join(att_name.split()) + ext
+                    att_data = {
                         '@odata.type': '#microsoft.graph.fileAttachment',
-                        'name': 'signature_waldo.png',
-                        'contentType': 'image/png',
-                        'contentBytes': base64.b64encode(sf.read()).decode('utf-8'),
-                        'contentId': 'signature_waldo',
-                        'isInline': True,
+                        'name': att_name,
+                        'contentBytes': base64.b64encode(att_bytes).decode('utf-8'),
                     }
+                except Exception:
+                    pass
 
-        # Build attachment once
-        att_data = None
-        if template.attachment:
-            try:
-                att_path = template.attachment.path
-                with open(att_path, 'rb') as f:
-                    att_bytes = f.read()
-                raw_name = os.path.basename(att_path)
-                name_part, ext = os.path.splitext(raw_name)
-                att_name = name_part.replace('_', ' ').replace('-', ' ')
-                att_name = ' '.join(att_name.split()) + ext
-                att_data = {
-                    '@odata.type': '#microsoft.graph.fileAttachment',
-                    'name': att_name,
-                    'contentBytes': base64.b64encode(att_bytes).decode('utf-8'),
-                }
-            except Exception:
-                pass
+            now_str = datetime.now().strftime('%d/%m/%Y')
 
-        now_str = datetime.now().strftime('%d/%m/%Y')
-        _progress_lock = threading.Lock()
-        # Adaptive throttle: all threads share this delay (seconds between sends)
-        _throttle = [1.0]  # start at 1 send/sec per thread → 5 threads ≈ 5/sec
+            for i, contact in enumerate(contacts):
+                # ── Check cancel flag ──
+                if prog.get('cancel'):
+                    prog['last_error'] = 'Cancelled by user'
+                    break
 
-        def _send_one(contact):
-            try:
-                email_addr = contact.email.strip()
-                if not email_addr:
-                    return
+                try:
+                    email_addr = (contact.email or '').strip()
+                    if not email_addr:
+                        prog['failed'] += 1
+                        continue
 
-                # Rate-limit: sleep before each send to avoid blasting the API
-                time.sleep(_throttle[0])
+                    test_override_addr = getattr(django_settings, 'TEST_EMAIL_OVERRIDE', None)
+                    if test_override_addr:
+                        email_addr = test_override_addr
 
-                test_override = getattr(django_settings, 'TEST_EMAIL_OVERRIDE', None)
-                if test_override:
-                    email_addr = test_override
+                    prog['current'] = f'({i+1}/{len(contacts)}) {email_addr}'
 
-                with _progress_lock:
-                    _send_all_progress[job_id]['current'] = email_addr
+                    # Variable substitution
+                    final_body = body_content
+                    final_body = final_body.replace('{{org_name}}', contact.org_name or '')
+                    final_body = final_body.replace('{{contact_name}}', contact.contact_name or '')
+                    final_body = final_body.replace('{{email}}', contact.email or '')
+                    final_body = final_body.replace('{{phone}}', contact.phone or '')
+                    final_body = final_body.replace('{{touchpoint_number}}', str(tp_num))
 
-                # Variable substitution
-                final_body = body_content
-                final_body = final_body.replace('{{org_name}}', contact.org_name or '')
-                final_body = final_body.replace('{{contact_name}}', contact.contact_name or '')
-                final_body = final_body.replace('{{email}}', contact.email or '')
-                final_body = final_body.replace('{{phone}}', contact.phone or '')
-                final_body = final_body.replace('{{touchpoint_number}}', str(tp_num))
+                    subject = template.subject or ''
+                    subject = subject.replace('{{org_name}}', contact.org_name or '')
+                    subject = subject.replace('{{contact_name}}', contact.contact_name or '')
 
-                subject = template.subject or ''
-                subject = subject.replace('{{org_name}}', contact.org_name or '')
-                subject = subject.replace('{{contact_name}}', contact.contact_name or '')
+                    # Refresh token every 45 minutes
+                    if time.time() - token_obtained > 2700:
+                        new_tok = _get_graph_token()
+                        if new_tok:
+                            token = new_tok
+                            token_obtained = time.time()
 
-                current_token = _fresh_token()
-                headers = {'Authorization': f'Bearer {current_token}', 'Content-Type': 'application/json'}
+                    headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
 
-                payload = {
-                    'message': {
-                        'subject': subject,
-                        'body': {'contentType': content_type, 'content': final_body},
-                        'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
-                        'toRecipients': [{'emailAddress': {'address': email_addr}}],
-                    },
-                    'saveToSentItems': 'true',
-                }
-                att_list = []
-                if att_data:
-                    att_list.append(att_data)
-                if sig_inline:
-                    att_list.append(sig_inline)
-                if att_list:
-                    payload['message']['attachments'] = att_list
+                    payload = {
+                        'message': {
+                            'subject': subject,
+                            'body': {'contentType': content_type, 'content': final_body},
+                            'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
+                            'toRecipients': [{'emailAddress': {'address': email_addr}}],
+                        },
+                        'saveToSentItems': 'true',
+                    }
+                    if att_data:
+                        payload['message']['attachments'] = [att_data]
 
-                # Retry with exponential backoff on throttling (429)
-                sent_ok = False
-                for attempt in range(5):
-                    try:
-                        r = http_requests.post(
-                            f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
-                            headers=headers, json=payload, timeout=30
-                        )
-                        if r.status_code == 202:
-                            sent_ok = True
-                            # Gradually speed up after success (min 0.3s)
-                            _throttle[0] = max(_throttle[0] * 0.95, 0.3)
+                    # ── Send with retry (max 3 attempts, short timeouts) ──
+                    sent_ok = False
+                    for attempt in range(3):
+                        if prog.get('cancel'):
                             break
-                        elif r.status_code == 429:
-                            retry_after = int(r.headers.get('Retry-After', 10))
-                            # Slow ALL threads down when throttled
-                            _throttle[0] = min(_throttle[0] * 2, 15.0)
-                            time.sleep(retry_after + attempt * 5)
-                        elif r.status_code == 401:
-                            # Token expired mid-run — force refresh
-                            with token_lock:
-                                token_data['obtained'] = 0
-                            current_token = _fresh_token()
-                            headers['Authorization'] = f'Bearer {current_token}'
+                        try:
+                            r = http_requests.post(
+                                f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
+                                headers=headers, json=payload,
+                                timeout=(5, 15),  # 5s connect, 15s read
+                            )
+                            if r.status_code == 202:
+                                sent_ok = True
+                                prog['last_error'] = ''
+                                break
+                            elif r.status_code == 429:
+                                retry_after = int(r.headers.get('Retry-After', 5))
+                                prog['last_error'] = f'Throttled (429) — waiting {retry_after}s'
+                                time.sleep(retry_after)
+                            elif r.status_code == 401:
+                                prog['last_error'] = 'Token expired — refreshing'
+                                token = _get_graph_token() or token
+                                token_obtained = time.time()
+                                headers['Authorization'] = f'Bearer {token}'
+                            else:
+                                # Non-retryable error — fail fast, move on
+                                err_body = r.text[:300] if r.text else 'no body'
+                                prog['last_error'] = f'HTTP {r.status_code}: {err_body}'
+                                break
+                        except http_requests.exceptions.Timeout:
+                            prog['last_error'] = f'Timeout on attempt {attempt+1}'
+                        except Exception as e:
+                            prog['last_error'] = f'Error: {str(e)[:200]}'
                             time.sleep(1)
-                        else:
-                            break  # Other error, give up
-                    except Exception:
-                        time.sleep(2)
 
-                with _progress_lock:
                     if sent_ok:
-                        _send_all_progress[job_id]['sent'] += 1
-                        setattr(contact, tp_sent_field, now_str)
-                        contact.last_touch = str(tp_num)
-                        contact.save(update_fields=[tp_sent_field, 'last_touch'])
-                        _send_all_progress[job_id]['results'].append({
+                        prog['sent'] += 1
+                        USEUContact.objects.filter(id=contact.id).update(
+                            **{tp_sent_field: now_str, 'last_touch': str(tp_num)}
+                        )
+                        prog['results'].append({
                             'id': contact.id, 'email': email_addr, 'ok': True, 'sent_on': now_str,
                         })
                     else:
-                        _send_all_progress[job_id]['failed'] += 1
-                        _send_all_progress[job_id]['results'].append({
+                        prog['failed'] += 1
+                        prog['results'].append({
                             'id': contact.id, 'email': email_addr, 'ok': False,
                         })
-            except Exception:
-                # Catch-all: never let one contact crash the entire send job
-                with _progress_lock:
-                    _send_all_progress[job_id]['failed'] += 1
-                    _send_all_progress[job_id]['results'].append({
+
+                    # Small delay between sends
+                    time.sleep(0.25)
+
+                except Exception as e:
+                    prog['last_error'] = f'Crash: {str(e)[:200]}'
+                    prog['failed'] += 1
+                    prog['results'].append({
                         'id': contact.id, 'email': getattr(contact, 'email', '?'), 'ok': False,
                     })
 
-        # Send with 5 concurrent threads + adaptive rate limiting
-        try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
-                pool.map(_send_one, contacts)
-        except Exception:
-            pass
+        except Exception as e:
+            prog['last_error'] = f'Fatal: {str(e)[:200]}'
         finally:
-            _send_all_progress[job_id]['done'] = True
-            _send_all_progress[job_id]['current'] = ''
+            prog['done'] = True
+            prog['current'] = ''
 
     t = threading.Thread(target=_do_send, daemon=True)
     t.start()
@@ -2159,6 +2159,7 @@ def send_all_progress(request):
         'failed': progress['failed'],
         'current': progress['current'],
         'done': progress['done'],
+        'last_error': progress.get('last_error', ''),
         'results': new_results,
         'next_idx': len(progress['results']),
     })
@@ -2291,27 +2292,17 @@ def send_touchpoint(request):
             body_content += '\n\n' + template.signature
         content_type = 'Text'
 
-    # Embed signature as inline CID attachment instead of external URL
-    sig_inline = None
+    # Replace Google Drive signature URL with hosted static URL
+    SIG_URL = 'https://workspace.moc-pty.com/static/signature_waldo.png'
     if content_type == 'HTML':
         import re
         body_content = re.sub(
             r'https://drive\.google\.com/thumbnail\?id=[^"\'&]+(?:&amp;[^"\']*|&[^"\']*)*',
-            r'cid:signature_waldo',
+            SIG_URL,
             body_content,
             flags=re.IGNORECASE
         )
-        sig_path = os.path.join(django_settings.BASE_DIR, 'static', 'signature_waldo.png')
-        if os.path.isfile(sig_path):
-            with open(sig_path, 'rb') as sf:
-                sig_inline = {
-                    '@odata.type': '#microsoft.graph.fileAttachment',
-                    'name': 'signature_waldo.png',
-                    'contentType': 'image/png',
-                    'contentBytes': base64.b64encode(sf.read()).decode('utf-8'),
-                    'contentId': 'signature_waldo',
-                    'isInline': True,
-                }
+        body_content = body_content.replace('cid:signature_waldo', SIG_URL)
 
     results = []
     for email_addr in recipients:
@@ -2373,8 +2364,6 @@ def send_touchpoint(request):
                 })
             except Exception:
                 pass
-        if sig_inline:
-            attachments.append(sig_inline)
         if attachments:
             payload['message']['attachments'] = attachments
 
