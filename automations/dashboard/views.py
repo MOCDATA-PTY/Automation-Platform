@@ -1954,6 +1954,8 @@ def send_all_touchpoint(request):
     }
 
     import threading
+    import concurrent.futures
+
     def _do_send():
         token = _get_graph_token()
         if not token:
@@ -1961,7 +1963,18 @@ def send_all_touchpoint(request):
             _send_all_progress[job_id]['error'] = 'Failed to get Graph API token'
             return
 
-        headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+        # Token auto-refresh for long-running jobs (tokens expire after 1 hour)
+        token_lock = threading.Lock()
+        token_data = {'value': token, 'obtained': time.time()}
+
+        def _fresh_token():
+            with token_lock:
+                if time.time() - token_data['obtained'] > 2700:  # refresh after 45 min
+                    new_tok = _get_graph_token()
+                    if new_tok:
+                        token_data['value'] = new_tok
+                        token_data['obtained'] = time.time()
+                return token_data['value']
 
         body_content = template.body_html if template.body_html else template.body
         content_type = 'HTML' if template.body_html else 'Text'
@@ -2007,90 +2020,119 @@ def send_all_touchpoint(request):
                 pass
 
         now_str = datetime.now().strftime('%d/%m/%Y')
-        import concurrent.futures
         _progress_lock = threading.Lock()
+        # Adaptive throttle: all threads share this delay (seconds between sends)
+        _throttle = [1.0]  # start at 1 send/sec per thread → 5 threads ≈ 5/sec
 
         def _send_one(contact):
-            email_addr = contact.email.strip()
-            if not email_addr:
-                return
+            try:
+                email_addr = contact.email.strip()
+                if not email_addr:
+                    return
 
-            test_override = getattr(django_settings, 'TEST_EMAIL_OVERRIDE', None)
-            if test_override:
-                email_addr = test_override
+                # Rate-limit: sleep before each send to avoid blasting the API
+                time.sleep(_throttle[0])
 
-            with _progress_lock:
-                _send_all_progress[job_id]['current'] = email_addr
+                test_override = getattr(django_settings, 'TEST_EMAIL_OVERRIDE', None)
+                if test_override:
+                    email_addr = test_override
 
-            # Variable substitution
-            final_body = body_content
-            final_body = final_body.replace('{{org_name}}', contact.org_name or '')
-            final_body = final_body.replace('{{contact_name}}', contact.contact_name or '')
-            final_body = final_body.replace('{{email}}', contact.email or '')
-            final_body = final_body.replace('{{phone}}', contact.phone or '')
-            final_body = final_body.replace('{{touchpoint_number}}', str(tp_num))
+                with _progress_lock:
+                    _send_all_progress[job_id]['current'] = email_addr
 
-            subject = template.subject or ''
-            subject = subject.replace('{{org_name}}', contact.org_name or '')
-            subject = subject.replace('{{contact_name}}', contact.contact_name or '')
+                # Variable substitution
+                final_body = body_content
+                final_body = final_body.replace('{{org_name}}', contact.org_name or '')
+                final_body = final_body.replace('{{contact_name}}', contact.contact_name or '')
+                final_body = final_body.replace('{{email}}', contact.email or '')
+                final_body = final_body.replace('{{phone}}', contact.phone or '')
+                final_body = final_body.replace('{{touchpoint_number}}', str(tp_num))
 
-            payload = {
-                'message': {
-                    'subject': subject,
-                    'body': {'contentType': content_type, 'content': final_body},
-                    'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
-                    'toRecipients': [{'emailAddress': {'address': email_addr}}],
-                },
-                'saveToSentItems': 'true',
-            }
-            att_list = []
-            if att_data:
-                att_list.append(att_data)
-            if sig_inline:
-                att_list.append(sig_inline)
-            if att_list:
-                payload['message']['attachments'] = att_list
+                subject = template.subject or ''
+                subject = subject.replace('{{org_name}}', contact.org_name or '')
+                subject = subject.replace('{{contact_name}}', contact.contact_name or '')
 
-            # Retry with backoff on throttling (429)
-            sent_ok = False
-            for attempt in range(4):
-                try:
-                    r = http_requests.post(
-                        f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
-                        headers=headers, json=payload, timeout=30
-                    )
-                    if r.status_code == 202:
-                        sent_ok = True
-                        break
-                    elif r.status_code == 429:
-                        retry_after = int(r.headers.get('Retry-After', 5))
-                        time.sleep(retry_after)
+                current_token = _fresh_token()
+                headers = {'Authorization': f'Bearer {current_token}', 'Content-Type': 'application/json'}
+
+                payload = {
+                    'message': {
+                        'subject': subject,
+                        'body': {'contentType': content_type, 'content': final_body},
+                        'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
+                        'toRecipients': [{'emailAddress': {'address': email_addr}}],
+                    },
+                    'saveToSentItems': 'true',
+                }
+                att_list = []
+                if att_data:
+                    att_list.append(att_data)
+                if sig_inline:
+                    att_list.append(sig_inline)
+                if att_list:
+                    payload['message']['attachments'] = att_list
+
+                # Retry with exponential backoff on throttling (429)
+                sent_ok = False
+                for attempt in range(5):
+                    try:
+                        r = http_requests.post(
+                            f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
+                            headers=headers, json=payload, timeout=30
+                        )
+                        if r.status_code == 202:
+                            sent_ok = True
+                            # Gradually speed up after success (min 0.3s)
+                            _throttle[0] = max(_throttle[0] * 0.95, 0.3)
+                            break
+                        elif r.status_code == 429:
+                            retry_after = int(r.headers.get('Retry-After', 10))
+                            # Slow ALL threads down when throttled
+                            _throttle[0] = min(_throttle[0] * 2, 15.0)
+                            time.sleep(retry_after + attempt * 5)
+                        elif r.status_code == 401:
+                            # Token expired mid-run — force refresh
+                            with token_lock:
+                                token_data['obtained'] = 0
+                            current_token = _fresh_token()
+                            headers['Authorization'] = f'Bearer {current_token}'
+                            time.sleep(1)
+                        else:
+                            break  # Other error, give up
+                    except Exception:
+                        time.sleep(2)
+
+                with _progress_lock:
+                    if sent_ok:
+                        _send_all_progress[job_id]['sent'] += 1
+                        setattr(contact, tp_sent_field, now_str)
+                        contact.last_touch = str(tp_num)
+                        contact.save(update_fields=[tp_sent_field, 'last_touch'])
+                        _send_all_progress[job_id]['results'].append({
+                            'id': contact.id, 'email': email_addr, 'ok': True, 'sent_on': now_str,
+                        })
                     else:
-                        break
-                except Exception:
-                    break
-
-            with _progress_lock:
-                if sent_ok:
-                    _send_all_progress[job_id]['sent'] += 1
-                    setattr(contact, tp_sent_field, now_str)
-                    contact.last_touch = str(tp_num)
-                    contact.save(update_fields=[tp_field, tp_sent_field, 'last_touch'])
-                    _send_all_progress[job_id]['results'].append({
-                        'id': contact.id, 'email': email_addr, 'ok': True, 'sent_on': now_str,
-                    })
-                else:
+                        _send_all_progress[job_id]['failed'] += 1
+                        _send_all_progress[job_id]['results'].append({
+                            'id': contact.id, 'email': email_addr, 'ok': False,
+                        })
+            except Exception:
+                # Catch-all: never let one contact crash the entire send job
+                with _progress_lock:
                     _send_all_progress[job_id]['failed'] += 1
                     _send_all_progress[job_id]['results'].append({
-                        'id': contact.id, 'email': email_addr, 'ok': False,
+                        'id': contact.id, 'email': getattr(contact, 'email', '?'), 'ok': False,
                     })
 
-        # Send with 10 concurrent threads (~10x faster)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
-            pool.map(_send_one, contacts)
-
-        _send_all_progress[job_id]['done'] = True
-        _send_all_progress[job_id]['current'] = ''
+        # Send with 5 concurrent threads + adaptive rate limiting
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+                pool.map(_send_one, contacts)
+        except Exception:
+            pass
+        finally:
+            _send_all_progress[job_id]['done'] = True
+            _send_all_progress[job_id]['current'] = ''
 
     t = threading.Thread(target=_do_send, daemon=True)
     t.start()
