@@ -411,10 +411,8 @@
             <span style="font-weight:700;font-size:14px;">Sending TP<span id="progTpNum">1</span>:</span>
             <span style="font-weight:700;font-size:14px;">Sent <span class="sent-count" id="progSent">0</span> of <span id="progTotal">0</span></span>
             <span>Failed: <span class="fail-count" id="progFailed">0</span></span>
-            <button onclick="cancelSendAll()" id="cancelBtn" style="background:#e74c3c;color:#fff;border:none;border-radius:6px;padding:4px 14px;cursor:pointer;font-size:13px;margin-left:10px;">Cancel</button>
+            <span id="progCurrent" style="color:var(--text-muted);font-style:italic;"></span>
         </div>
-        <div id="progCurrent" style="color:var(--text-muted);font-style:italic;margin:4px 0;"></div>
-        <div id="progError" style="color:#e74c3c;font-size:13px;margin:2px 0;font-weight:600;"></div>
         <div class="progress-bar-wrap">
             <div class="progress-bar-fill" id="progBar"></div>
         </div>
@@ -810,10 +808,6 @@
         document.getElementById('progTotal').textContent = '...';
         document.getElementById('progBar').style.width = '0%';
         document.getElementById('progCurrent').textContent = '';
-        document.getElementById('progError').textContent = '';
-        document.getElementById('cancelBtn').style.display = '';
-        document.getElementById('cancelBtn').disabled = false;
-        document.getElementById('cancelBtn').textContent = 'Cancel';
         document.getElementById('progressPanel').style.display = 'block';
 
         fetch('{% url "send_all_touchpoint" %}', {
@@ -842,16 +836,6 @@
         });
     };
 
-    window.cancelSendAll = function() {
-        if (!sendJobId) return;
-        if (!confirm('Cancel sending?')) return;
-        fetch('{% url "send_all_cancel" %}?job_id=' + sendJobId)
-        .then(r => r.json()).then(() => {
-            document.getElementById('cancelBtn').textContent = 'Cancelling...';
-            document.getElementById('cancelBtn').disabled = true;
-        });
-    };
-
     function pollProgress() {
         if (!sendJobId) return;
         const tpNum = parseInt(document.getElementById('tpSelect').value);
@@ -865,13 +849,12 @@
 
             document.getElementById('progSent').textContent = data.sent;
             document.getElementById('progFailed').textContent = data.failed;
+            const totalCount = parseInt(document.getElementById('progTotal').textContent) || 0;
             if (data.current) {
-                document.getElementById('progCurrent').textContent = data.current;
+                document.getElementById('progCurrent').textContent = 'Sending ' + (data.sent + data.failed + 1) + ' of ' + totalCount + ' — ' + data.current;
             } else {
                 document.getElementById('progCurrent').textContent = '';
             }
-            // Show last API error so user can see WHY it's stuck
-            document.getElementById('progError').textContent = data.last_error || '';
 
             const pct = data.total > 0 ? ((data.sent + data.failed) / data.total * 100) : 0;
             document.getElementById('progBar').style.width = pct.toFixed(1) + '%';
@@ -913,13 +896,7 @@
             if (data.done) {
                 document.getElementById('sendAllBtn').disabled = false;
                 document.getElementById('sendAllBtn').textContent = 'Send All';
-                document.getElementById('cancelBtn').style.display = 'none';
-                const lastErr = data.last_error || '';
-                if (lastErr.includes('Cancelled')) {
-                    document.getElementById('progCurrent').textContent = 'Cancelled. Sent ' + data.sent + ' of ' + data.total + '.';
-                } else {
-                    document.getElementById('progCurrent').textContent = 'Complete! Sent ' + data.sent + ' of ' + data.total + '.';
-                }
+                document.getElementById('progCurrent').textContent = 'Complete! Sent ' + data.sent + ' of ' + data.total + '.';
                 sendJobId = null;
                 updateEligibleCount();
             } else {

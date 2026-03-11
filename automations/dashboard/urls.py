@@ -75,7 +75,6 @@ urlpatterns = [
     path('useu-list/update-cell/', views.useu_update_cell, name='useu_update_cell'),
     path('useu-list/send-all/', views.send_all_touchpoint, name='send_all_touchpoint'),
     path('useu-list/send-all/progress/', views.send_all_progress, name='send_all_progress'),
-    path('useu-list/send-all/cancel/', views.send_all_cancel, name='send_all_cancel'),
     path('email-templates/', views.email_templates, name='email_templates'),
     path('email-templates/save/', views.email_template_save, name='email_template_save'),
     path('email-templates/send/', views.send_touchpoint, name='send_touchpoint'),
