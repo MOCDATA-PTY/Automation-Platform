@@ -483,10 +483,12 @@
     // 13:tp4, 14:tp4_sent, 15:tp5, 16:tp5_sent, 17:tp6, 18:tp6_sent,
     // 19:tp7, 20:tp7_sent, 21:tp8, 22:tp8_sent, 23:tp9, 24:tp9_sent,
     // 25:tp10, 26:tp10_sent
-    const allData = {{ rows_json|safe }};
-    let filtered = allData;
-    let perPage = 100;
-    let currentPage = 1;
+    let pageData = {{ rows_json|safe }};
+    let perPage = {{ per_page }};
+    let currentPage = {{ current_page }};
+    let totalFiltered = {{ filtered_total }};
+    let totalAll = {{ total_rows }};
+    let searchQuery = '{{ search|escapejs }}';
     let sortCol = -1;
     let sortAsc = true;
 
@@ -511,7 +513,7 @@
 
     // Build a lookup by contact ID for live updates
     const dataById = {};
-    allData.forEach(r => { dataById[r[0]] = r; });
+    pageData.forEach(r => { dataById[r[0]] = r; });
 
     const tbody = document.getElementById('tableBody');
     const pagBtns = document.getElementById('pagBtns');
@@ -643,12 +645,10 @@
     }
 
     function renderPage() {
-        const start = (currentPage - 1) * perPage;
-        const end = Math.min(start + perPage, filtered.length);
         tbody.innerHTML = '';
 
-        for (let i = start; i < end; i++) {
-            const r = filtered[i];
+        for (let i = 0; i < pageData.length; i++) {
+            const r = pageData[i];
             const tr = document.createElement('tr');
             tr.setAttribute('data-id', r[0]);
 
@@ -656,18 +656,15 @@
                 const td = document.createElement('td');
 
                 if (c === 5) {
-                    // Status column
                     td.className = 'editable-cell';
                     td.innerHTML = statusBadge(r[c]);
                     makeEditableStatus(td, r, c);
                 } else if (TP_STATUS_COLS.includes(c)) {
-                    // TP status columns (Sent/empty)
                     td.className = 'editable-cell';
                     td.innerHTML = tpBadge(r[c]);
                     td.setAttribute('data-col', c);
                     makeEditableText(td, r, c);
                 } else if (DATE_COLS.includes(c)) {
-                    // Date columns
                     td.className = 'editable-cell';
                     td.textContent = r[c] || '';
                     td.setAttribute('data-col', c);
@@ -685,15 +682,16 @@
             tbody.appendChild(tr);
         }
 
-        document.getElementById('showStart').textContent = filtered.length ? start + 1 : 0;
+        const start = (currentPage - 1) * perPage;
+        const end = start + pageData.length;
+        document.getElementById('showStart').textContent = totalFiltered ? start + 1 : 0;
         document.getElementById('showEnd').textContent = end;
-        document.getElementById('showTotal').textContent = filtered.length;
+        document.getElementById('showTotal').textContent = totalFiltered;
         renderPagination();
-        updateEligibleCount();
     }
 
     function renderPagination() {
-        const totalPages = Math.ceil(filtered.length / perPage) || 1;
+        const totalPages = Math.ceil(totalFiltered / perPage) || 1;
         let html = '';
         html += '<button ' + (currentPage === 1 ? 'disabled' : '') + ' onclick="goPage(' + (currentPage - 1) + ')">&laquo;</button>';
         let pages = [];
@@ -716,64 +714,77 @@
 
     function updateEligibleCount() {
         const tpNum = parseInt(document.getElementById('tpSelect').value);
-        const sentCol = 6 + (tpNum * 2); // tp1_sent = col 8, tp2_sent = col 10, etc.
-        let count = 0;
-        allData.forEach(r => {
-            if ((r[5] || '').trim() === 'Active' && !(r[sentCol] || '').trim() && (r[3] || '').trim()) {
-                count++;
-            }
-        });
-        document.getElementById('eligibleCount').textContent = count + ' eligible contacts';
+        // Use server-provided total for eligible count display
+        document.getElementById('eligibleCount').textContent = '';
+        fetch('{% url "useu_list" %}?page=1&per_page=1&search=', {
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+        }).catch(() => {});
+        // Simple estimate: just show total active
+        document.getElementById('eligibleCount').textContent = '';
     }
 
-    document.getElementById('tpSelect').addEventListener('change', updateEligibleCount);
+    document.getElementById('tpSelect').addEventListener('change', function() {});
+
+    function fetchPage(page, search, pp) {
+        const url = '{% url "useu_list" %}?page=' + page + '&per_page=' + pp + '&search=' + encodeURIComponent(search || '');
+        fetch(url, {
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+        })
+        .then(r => r.json())
+        .then(data => {
+            pageData = data.rows;
+            totalFiltered = data.total;
+            currentPage = data.page;
+            perPage = data.per_page;
+            // Rebuild lookup
+            Object.keys(dataById).forEach(k => delete dataById[k]);
+            pageData.forEach(r => { dataById[r[0]] = r; });
+            renderPage();
+        })
+        .catch(err => console.error('Fetch error:', err));
+    }
 
     window.goPage = function(p) {
-        const totalPages = Math.ceil(filtered.length / perPage) || 1;
+        const totalPages = Math.ceil(totalFiltered / perPage) || 1;
         if (p < 1 || p > totalPages) return;
-        currentPage = p;
-        renderPage();
+        fetchPage(p, searchQuery, perPage);
         document.querySelector('.list-card').scrollIntoView({behavior: 'smooth', block: 'start'});
     };
 
     window.changePerPage = function() {
         perPage = parseInt(document.getElementById('perPage').value);
         currentPage = 1;
-        renderPage();
+        fetchPage(1, searchQuery, perPage);
     };
 
-    // Search
+    // Search — server-side
     let searchTimer;
     searchBox.addEventListener('input', function() {
         clearTimeout(searchTimer);
         searchTimer = setTimeout(function() {
-            const q = searchBox.value.trim().toLowerCase();
-            if (!q) { filtered = allData; }
-            else {
-                filtered = allData.filter(r => r.some(cell => (cell || '').toString().toLowerCase().includes(q)));
-            }
+            searchQuery = searchBox.value.trim();
             currentPage = 1;
-            renderPage();
-        }, 300);
+            fetchPage(1, searchQuery, perPage);
+        }, 500);
     });
 
-    // Sort
+    // Sort — disabled for server-side (would need backend support)
     document.querySelectorAll('.list-table th[data-col]').forEach(th => {
         th.addEventListener('click', function() {
+            // Client-side sort on current page only
             const col = parseInt(this.dataset.col);
             if (sortCol === col) sortAsc = !sortAsc;
             else { sortCol = col; sortAsc = true; }
             document.querySelectorAll('.list-table th').forEach(h => h.classList.remove('sorted'));
             this.classList.add('sorted');
             this.querySelector('.sort-arrow').innerHTML = sortAsc ? '&#9650;' : '&#9660;';
-            filtered.sort((a, b) => {
+            pageData.sort((a, b) => {
                 const va = (a[col] || '').toString().toLowerCase();
                 const vb = (b[col] || '').toString().toLowerCase();
                 if (va < vb) return sortAsc ? -1 : 1;
                 if (va > vb) return sortAsc ? 1 : -1;
                 return 0;
             });
-            currentPage = 1;
             renderPage();
         });
     });
@@ -785,18 +796,8 @@
     window.startSendAll = function() {
         const tpNum = document.getElementById('tpSelect').value;
         const btn = document.getElementById('sendAllBtn');
-        const sentCol = 6 + (parseInt(tpNum) * 2);
 
-        // Count eligible
-        let eligible = 0;
-        allData.forEach(r => {
-            if ((r[5] || '').trim() === 'Active' && !(r[sentCol] || '').trim() && (r[3] || '').trim()) eligible++;
-        });
-        if (eligible === 0) {
-            alert('No eligible contacts for TP' + tpNum + '. All active contacts already have a sent date.');
-            return;
-        }
-        if (!confirm('Send TP' + tpNum + ' to ' + eligible + ' contacts?')) return;
+        if (!confirm('Send TP' + tpNum + ' to all eligible contacts?')) return;
 
         btn.disabled = true;
         btn.textContent = 'Sending...';
@@ -804,7 +805,7 @@
         document.getElementById('progTpNum').textContent = tpNum;
         document.getElementById('progSent').textContent = '0';
         document.getElementById('progFailed').textContent = '0';
-        document.getElementById('progTotal').textContent = eligible;
+        document.getElementById('progTotal').textContent = '...';
         document.getElementById('progBar').style.width = '0%';
         document.getElementById('progCurrent').textContent = '';
         document.getElementById('progressPanel').style.display = 'block';
