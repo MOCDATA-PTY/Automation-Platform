@@ -1816,7 +1816,25 @@ def useu_list(request):
     active_count = contacts.filter(status='Active').count()
     faulty_count = contacts.filter(status='Faulty Data').count()
 
-    rows = list(contacts.values_list(
+    # Server-side pagination
+    page = int(request.GET.get('page', 1))
+    per_page = int(request.GET.get('per_page', 100))
+    search = request.GET.get('search', '').strip()
+
+    qs = contacts
+    if search:
+        from django.db.models import Q
+        qs = qs.filter(
+            Q(org_name__icontains=search) |
+            Q(contact_name__icontains=search) |
+            Q(email__icontains=search)
+        )
+
+    filtered_total = qs.count()
+    start = (page - 1) * per_page
+    end = start + per_page
+
+    rows = list(qs.order_by('id')[start:end].values_list(
         'id', 'org_name', 'contact_name', 'email', 'phone', 'status', 'last_touch',
         'touchpoint_1', 'tp1_sent_on',
         'touchpoint_2', 'tp2_sent_on',
@@ -1830,13 +1848,26 @@ def useu_list(request):
         'touchpoint_10', 'tp10_sent_on',
     ))
 
+    # AJAX requests get JSON
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({
+            'rows': [list(r) for r in rows],
+            'total': filtered_total,
+            'page': page,
+            'per_page': per_page,
+        })
+
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     return render(request, 'useu_list.html', {
         'rows_json': json.dumps([list(r) for r in rows]),
         'total_rows': total,
+        'filtered_total': filtered_total,
         'active_count': active_count,
         'faulty_count': faulty_count,
         'dark_mode': profile.dark_mode,
+        'current_page': page,
+        'per_page': per_page,
+        'search': search,
     })
 
 
