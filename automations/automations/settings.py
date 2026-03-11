@@ -75,6 +75,10 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 LOGIN_URL = '/login/'
 
+# Test mode: override all outgoing touchpoint emails to this address
+# Set to None or remove to send to real recipients
+TEST_EMAIL_OVERRIDE = 'ethansevenster5@gmail.com'
+
 GOOGLE_DRIVE_FOLDER_ID = '1xPGTc8320el4HXmZ3tNsHcavGtZ4asIY'
 GOOGLE_CLIENT_SECRET_FILE = str(BASE_DIR.parent / 'Turn over GABE tuesday update' / 'client_secret_929057555993-c86mkjhf08suobk6olcca6sgmudeg8l0.apps.googleusercontent.com.json')
 GOOGLE_TOKEN_FILE = str(BASE_DIR / 'token.json')

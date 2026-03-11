@@ -137,6 +137,22 @@
     background: #fde8e8;
     color: #c0392b;
 }
+.status-undeliverable {
+    background: #fde8e8;
+    color: #c0392b;
+}
+.status-optedout {
+    background: #f0e6f6;
+    color: #6c3483;
+}
+.status-hubspot {
+    background: #e8f0fe;
+    color: #1a56db;
+}
+.status-autoreply {
+    background: #fff3cd;
+    color: #856404;
+}
 .tp-sent-badge {
     display: inline-block;
     padding: 2px 8px;
@@ -313,6 +329,10 @@
 [data-theme="dark"] .status-active { background: #1b3a1b; color: #6fcf6f; }
 [data-theme="dark"] .status-inactive { background: #3a3a1b; color: #cfcf6f; }
 [data-theme="dark"] .status-faulty { background: #3a1b1b; color: #f06f6f; }
+[data-theme="dark"] .status-undeliverable { background: #3a1b1b; color: #f06f6f; }
+[data-theme="dark"] .status-optedout { background: #2d1b3a; color: #c08fdf; }
+[data-theme="dark"] .status-hubspot { background: #1b2a3a; color: #6fa8f0; }
+[data-theme="dark"] .status-autoreply { background: #3a3a1b; color: #cfcf6f; }
 [data-theme="dark"] .tp-sent-badge { background: #1b3a1b; color: #6fcf6f; }
 [data-theme="dark"] .list-table tbody tr:hover td { background: rgba(108, 180, 216, 0.06); }
 [data-theme="dark"] .editable-cell:hover { background: rgba(108, 180, 216, 0.1); }
@@ -388,10 +408,9 @@
     <!-- Progress panel -->
     <div class="send-progress-panel" id="progressPanel">
         <div class="progress-stats">
-            <span>Sending TP<span id="progTpNum">1</span>...</span>
-            <span>Sent: <span class="sent-count" id="progSent">0</span></span>
+            <span style="font-weight:700;font-size:14px;">Sending TP<span id="progTpNum">1</span>:</span>
+            <span style="font-weight:700;font-size:14px;">Sent <span class="sent-count" id="progSent">0</span> of <span id="progTotal">0</span></span>
             <span>Failed: <span class="fail-count" id="progFailed">0</span></span>
-            <span>of <span id="progTotal">0</span></span>
             <span id="progCurrent" style="color:var(--text-muted);font-style:italic;"></span>
         </div>
         <div class="progress-bar-wrap">
@@ -412,7 +431,7 @@
                     <th data-col="3">Email <span class="sort-arrow">&#9650;</span></th>
                     <th data-col="4">Phone <span class="sort-arrow">&#9650;</span></th>
                     <th data-col="5">Status <span class="sort-arrow">&#9650;</span></th>
-                    <th data-col="6">Last Touch <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="6">Last Touchpoint <span class="sort-arrow">&#9650;</span></th>
                     <th data-col="7" class="tp-header">TP1 <span class="sort-arrow">&#9650;</span></th>
                     <th data-col="8" class="tp-header">TP1 Sent <span class="sort-arrow">&#9650;</span></th>
                     <th data-col="9" class="tp-header">TP2 <span class="sort-arrow">&#9650;</span></th>
@@ -503,6 +522,10 @@
         if (v === 'Active') return '<span class="status-badge status-active">Active</span>';
         if (v === 'Inactive') return '<span class="status-badge status-inactive">Inactive</span>';
         if (v === 'Faulty Data') return '<span class="status-badge status-faulty">Faulty Data</span>';
+        if (v === 'Undeliverable') return '<span class="status-badge status-undeliverable">Undeliverable</span>';
+        if (v === 'Opted Out') return '<span class="status-badge status-optedout">Opted Out</span>';
+        if (v === 'Moved to HubSpot') return '<span class="status-badge status-hubspot">Moved to HubSpot</span>';
+        if (v === 'Automatic Reply') return '<span class="status-badge status-autoreply">Automatic Reply</span>';
         return v;
     }
 
@@ -599,7 +622,7 @@
             if (td.querySelector('select')) return;
             const current = (row[col] || '').trim();
             let html = '<select class="status-select">';
-            ['Active', 'Inactive', 'Faulty Data'].forEach(opt => {
+            ['Active', 'Inactive', 'Faulty Data', 'Undeliverable', 'Opted Out', 'Moved to HubSpot', 'Automatic Reply'].forEach(opt => {
                 html += '<option value="' + opt + '"' + (opt === current ? ' selected' : '') + '>' + opt + '</option>';
             });
             html += '</select>';
@@ -825,7 +848,12 @@
 
             document.getElementById('progSent').textContent = data.sent;
             document.getElementById('progFailed').textContent = data.failed;
-            document.getElementById('progCurrent').textContent = data.current ? 'Sending to ' + data.current + '...' : '';
+            const totalCount = parseInt(document.getElementById('progTotal').textContent) || 0;
+            if (data.current) {
+                document.getElementById('progCurrent').textContent = 'Sending ' + (data.sent + data.failed + 1) + ' of ' + totalCount + ' — ' + data.current;
+            } else {
+                document.getElementById('progCurrent').textContent = '';
+            }
 
             const pct = data.total > 0 ? ((data.sent + data.failed) / data.total * 100) : 0;
             document.getElementById('progBar').style.width = pct.toFixed(1) + '%';
@@ -867,7 +895,7 @@
             if (data.done) {
                 document.getElementById('sendAllBtn').disabled = false;
                 document.getElementById('sendAllBtn').textContent = 'Send All';
-                document.getElementById('progCurrent').textContent = 'Done!';
+                document.getElementById('progCurrent').textContent = 'Complete! Sent ' + data.sent + ' of ' + data.total + '.';
                 sendJobId = null;
                 updateEligibleCount();
             } else {

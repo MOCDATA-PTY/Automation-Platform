@@ -1900,6 +1900,11 @@ def send_all_touchpoint(request):
     if not contacts:
         return JsonResponse({'ok': False, 'error': 'No eligible contacts found'}, status=400)
 
+    # In test mode, only send to 1 contact to avoid spamming
+    test_override = getattr(django_settings, 'TEST_EMAIL_OVERRIDE', None)
+    if test_override:
+        contacts = contacts[:1]
+
     # Get template
     try:
         template = TouchpointTemplate.objects.get(touchpoint_number=tp_num)
@@ -1930,14 +1935,26 @@ def send_all_touchpoint(request):
         body_content = template.body_html if template.body_html else template.body
         content_type = 'HTML' if template.body_html else 'Text'
 
-        # Replace signature URL
+        # Embed signature as inline CID attachment instead of external URL
+        sig_inline = None
         if content_type == 'HTML':
             body_content = re.sub(
                 r'https://drive\.google\.com/thumbnail\?id=[^"\'&]+(?:&amp;[^"\']*|&[^"\']*)*',
-                r'https://workspace.moc-pty.com/static/signature_waldo.png',
+                r'cid:signature_waldo',
                 body_content,
                 flags=re.IGNORECASE
             )
+            sig_path = os.path.join(django_settings.BASE_DIR, 'static', 'signature_waldo.png')
+            if os.path.isfile(sig_path):
+                with open(sig_path, 'rb') as sf:
+                    sig_inline = {
+                        '@odata.type': '#microsoft.graph.fileAttachment',
+                        'name': 'signature_waldo.png',
+                        'contentType': 'image/png',
+                        'contentBytes': base64.b64encode(sf.read()).decode('utf-8'),
+                        'contentId': 'signature_waldo',
+                        'isInline': True,
+                    }
 
         # Build attachment once
         att_data = None
@@ -1958,12 +1975,17 @@ def send_all_touchpoint(request):
             except Exception:
                 pass
 
-        now_str = datetime.now().strftime('%Y-%m-%d')
+        now_str = datetime.now().strftime('%d/%m/%Y')
 
         for contact in contacts:
             email_addr = contact.email.strip()
             if not email_addr:
                 continue
+
+            # Override recipient for testing
+            test_override = getattr(django_settings, 'TEST_EMAIL_OVERRIDE', None)
+            if test_override:
+                email_addr = test_override
 
             _send_all_progress[job_id]['current'] = email_addr
 
@@ -1983,12 +2005,18 @@ def send_all_touchpoint(request):
                 'message': {
                     'subject': subject,
                     'body': {'contentType': content_type, 'content': final_body},
+                    'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
                     'toRecipients': [{'emailAddress': {'address': email_addr}}],
                 },
                 'saveToSentItems': 'true',
             }
+            att_list = []
             if att_data:
-                payload['message']['attachments'] = [att_data]
+                att_list.append(att_data)
+            if sig_inline:
+                att_list.append(sig_inline)
+            if att_list:
+                payload['message']['attachments'] = att_list
 
             try:
                 r = http_requests.post(
@@ -2177,15 +2205,27 @@ def send_touchpoint(request):
             body_content += '\n\n' + template.signature
         content_type = 'Text'
 
-    # Replace Google Drive signature URLs with server-hosted image
+    # Embed signature as inline CID attachment instead of external URL
+    sig_inline = None
     if content_type == 'HTML':
         import re
         body_content = re.sub(
             r'https://drive\.google\.com/thumbnail\?id=[^"\'&]+(?:&amp;[^"\']*|&[^"\']*)*',
-            r'https://workspace.moc-pty.com/static/signature_waldo.png',
+            r'cid:signature_waldo',
             body_content,
             flags=re.IGNORECASE
         )
+        sig_path = os.path.join(django_settings.BASE_DIR, 'static', 'signature_waldo.png')
+        if os.path.isfile(sig_path):
+            with open(sig_path, 'rb') as sf:
+                sig_inline = {
+                    '@odata.type': '#microsoft.graph.fileAttachment',
+                    'name': 'signature_waldo.png',
+                    'contentType': 'image/png',
+                    'contentBytes': base64.b64encode(sf.read()).decode('utf-8'),
+                    'contentId': 'signature_waldo',
+                    'isInline': True,
+                }
 
     results = []
     for email_addr in recipients:
@@ -2193,8 +2233,14 @@ def send_touchpoint(request):
         if not email_addr:
             continue
 
+        # Override recipient for testing
+        test_override = getattr(django_settings, 'TEST_EMAIL_OVERRIDE', None)
+        original_email = email_addr
+        if test_override:
+            email_addr = test_override
+
         # Look up contact for variable substitution
-        contact = USEUContact.objects.filter(email__iexact=email_addr).first()
+        contact = USEUContact.objects.filter(email__iexact=original_email).first()
         final_body = body_content
         if contact:
             final_body = final_body.replace('{{org_name}}', contact.org_name or '')
@@ -2215,6 +2261,7 @@ def send_touchpoint(request):
                     'contentType': content_type,
                     'content': final_body,
                 },
+                'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
                 'toRecipients': [
                     {'emailAddress': {'address': email_addr}}
                 ],
@@ -2240,6 +2287,8 @@ def send_touchpoint(request):
                 })
             except Exception:
                 pass
+        if sig_inline:
+            attachments.append(sig_inline)
         if attachments:
             payload['message']['attachments'] = attachments
 
@@ -2256,7 +2305,7 @@ def send_touchpoint(request):
         if sent_ok and contact:
             tp_field = f'touchpoint_{tp_num}'
             tp_sent_field = f'tp{tp_num}_sent_on'
-            now_str = datetime.now().strftime('%Y-%m-%d')
+            now_str = datetime.now().strftime('%d/%m/%Y')
             update_fields = {tp_field: 'Sent', tp_sent_field: now_str, 'last_touch': str(tp_num)}
             USEUContact.objects.filter(id=contact.id).update(**update_fields)
 
