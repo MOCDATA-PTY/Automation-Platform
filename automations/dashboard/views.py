@@ -1976,18 +1976,20 @@ def send_all_touchpoint(request):
                 pass
 
         now_str = datetime.now().strftime('%d/%m/%Y')
+        import concurrent.futures
+        _progress_lock = threading.Lock()
 
-        for contact in contacts:
+        def _send_one(contact):
             email_addr = contact.email.strip()
             if not email_addr:
-                continue
+                return
 
-            # Override recipient for testing
             test_override = getattr(django_settings, 'TEST_EMAIL_OVERRIDE', None)
             if test_override:
                 email_addr = test_override
 
-            _send_all_progress[job_id]['current'] = email_addr
+            with _progress_lock:
+                _send_all_progress[job_id]['current'] = email_addr
 
             # Variable substitution
             final_body = body_content
@@ -2018,31 +2020,43 @@ def send_all_touchpoint(request):
             if att_list:
                 payload['message']['attachments'] = att_list
 
-            try:
-                r = http_requests.post(
-                    f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
-                    headers=headers, json=payload, timeout=30
-                )
-                sent_ok = r.status_code == 202
-            except Exception:
-                sent_ok = False
+            # Retry with backoff on throttling (429)
+            sent_ok = False
+            for attempt in range(4):
+                try:
+                    r = http_requests.post(
+                        f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
+                        headers=headers, json=payload, timeout=30
+                    )
+                    if r.status_code == 202:
+                        sent_ok = True
+                        break
+                    elif r.status_code == 429:
+                        retry_after = int(r.headers.get('Retry-After', 5))
+                        time.sleep(retry_after)
+                    else:
+                        break
+                except Exception:
+                    break
 
-            if sent_ok:
-                _send_all_progress[job_id]['sent'] += 1
-                setattr(contact, tp_sent_field, now_str)
-                contact.last_touch = str(tp_num)
-                contact.save(update_fields=[tp_field, tp_sent_field, 'last_touch'])
-                _send_all_progress[job_id]['results'].append({
-                    'id': contact.id, 'email': email_addr, 'ok': True, 'sent_on': now_str,
-                })
-            else:
-                _send_all_progress[job_id]['failed'] += 1
-                _send_all_progress[job_id]['results'].append({
-                    'id': contact.id, 'email': email_addr, 'ok': False,
-                })
+            with _progress_lock:
+                if sent_ok:
+                    _send_all_progress[job_id]['sent'] += 1
+                    setattr(contact, tp_sent_field, now_str)
+                    contact.last_touch = str(tp_num)
+                    contact.save(update_fields=[tp_field, tp_sent_field, 'last_touch'])
+                    _send_all_progress[job_id]['results'].append({
+                        'id': contact.id, 'email': email_addr, 'ok': True, 'sent_on': now_str,
+                    })
+                else:
+                    _send_all_progress[job_id]['failed'] += 1
+                    _send_all_progress[job_id]['results'].append({
+                        'id': contact.id, 'email': email_addr, 'ok': False,
+                    })
 
-            # Rate limit: ~4 emails per second
-            time.sleep(0.25)
+        # Send with 10 concurrent threads (~10x faster)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+            pool.map(_send_one, contacts)
 
         _send_all_progress[job_id]['done'] = True
         _send_all_progress[job_id]['current'] = ''
