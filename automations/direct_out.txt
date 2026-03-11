@@ -1,0 +1,41 @@
+=== FINAL BODY (first 2000 chars) ===
+<div style="font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; color: #000000; line-height: 1.6;">
+<p>Hi,</p>
+<p>I wanted to introduce myself and Magnum Opus Consultants.</p>
+<p>
+    We work with freight forwarding and logistics companies internationally from South Africa.
+    In simple terms, businesses partner with us when they need additional capacity and local hiring costs start becoming difficult to justify.
+</p>
+<p>
+    By placing staff remotely or handling specific functions externally, our clients typically reduce employment costs by as much as 
+<strong>70% compared to hiring locally</strong>, while keeping the role fully integrated into their daily workflow.
+</p>
+<p>We usually support three key areas:</p>
+<ul style="margin-top: 0;">
+<li>Operational and administrative roles</li>
+<li>Reporting and data analysis</li>
+<li>Digital marketing</li>
+</ul>
+<p>
+    Over the next few emails, I’ll share a bit more context so you can see where we typically fit into a forwarding environment and how this structure works in practice.
+</p>
+<p>Kind regards,</p>
+<!-- Signature Image -->
+<div style="text-align: left; margin-top: 10px;">
+<img src="https://workspace.moc-pty.com/static/signature_waldo.png" alt="Waldo Signature" style="width: 600px; height: auto; display: block; border: 0;">
+</div>
+</div>
+
+[OK] Signature URL replaced correctly
+
+[OK] Got Graph API token
+[OK] Attachment: MOC Company Profile 2026.pdf (2488412 bytes)
+
+Sending to: ethansevenster5@gmail.com
+Subject: Introducing Magnum Opus Consultants
+Content type: HTML
+Body length: 1345 chars
+Attachments: 1
+
+Response: 202
+[OK] Email sent successfully!

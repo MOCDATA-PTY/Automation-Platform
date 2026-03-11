@@ -2029,7 +2029,6 @@ def send_all_touchpoint(request):
 
             if sent_ok:
                 _send_all_progress[job_id]['sent'] += 1
-                setattr(contact, tp_field, 'Sent')
                 setattr(contact, tp_sent_field, now_str)
                 contact.last_touch = str(tp_num)
                 contact.save(update_fields=[tp_field, tp_sent_field, 'last_touch'])

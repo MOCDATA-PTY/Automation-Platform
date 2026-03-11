@@ -1,0 +1,6 @@
+CSRF token: rPwmqxGdIBcIw6tSClsS...
+Login response: 302 Location: /
+After redirect: 200 http://127.0.0.1:8000/
+
+Send result: 200
+{"ok": true, "results": [{"email": "ethansevenster5@gmail.com", "ok": true, "status": 202}]}
