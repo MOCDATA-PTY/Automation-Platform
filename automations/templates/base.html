@@ -411,7 +411,7 @@
                 </a>
             </li>
             <li>
-                <a href="{% url 'useu_list' %}" class="{% if request.resolver_match.url_name == 'useu_list' %}active{% endif %}">
+                <a href="{% url 'useu_list' %}" class="{% if request.resolver_match.url_name == 'useu_list' or request.resolver_match.url_name == 'email_templates' %}active{% endif %}">
                     <span class="icon">
                         <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zm-5-7h-2v2H9v-2H7v-2h2V9h2v2h2v2z"/></svg>
                     </span>
@@ -443,7 +443,7 @@
         {% block content %}{% endblock %}
 
         {% with url_name=request.resolver_match.url_name %}
-        {% if url_name not in 'home,sync_monitor,login,logout' %}
+        {% if url_name not in 'home,sync_monitor,login,logout,email_templates' %}
         <div class="powerbi-section" id="powerbi-section">
             <div class="powerbi-header">
                 <div class="powerbi-title">

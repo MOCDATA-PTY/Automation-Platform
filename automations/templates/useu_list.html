@@ -129,9 +129,22 @@
     background: #e6f4ea;
     color: #1e7e34;
 }
+.status-inactive {
+    background: #fff3cd;
+    color: #856404;
+}
 .status-faulty {
     background: #fde8e8;
     color: #c0392b;
+}
+.tp-sent-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #e6f4ea;
+    color: #1e7e34;
 }
 .pagination {
     display: flex;
@@ -178,12 +191,161 @@
     color: var(--text-primary);
 }
 
+/* Editable cell styles */
+.editable-cell {
+    cursor: pointer;
+    position: relative;
+    min-width: 80px;
+}
+.editable-cell:hover {
+    background: rgba(5, 75, 112, 0.08);
+    border-radius: 3px;
+}
+.editable-cell input[type="text"],
+.editable-cell input[type="date"] {
+    width: 100%;
+    min-width: 100px;
+    padding: 4px 6px;
+    border: 1px solid #054B70;
+    border-radius: 4px;
+    font-size: 12px;
+    background: var(--surface);
+    color: var(--text-primary);
+    outline: none;
+    box-sizing: border-box;
+}
+.editable-cell select {
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid #054B70;
+    border-radius: 4px;
+    font-size: 12px;
+    background: var(--surface);
+    color: var(--text-primary);
+    outline: none;
+}
+.cell-saving {
+    opacity: 0.5;
+}
+.cell-saved {
+    animation: cellFlash 0.6s ease;
+}
+@keyframes cellFlash {
+    0% { background: rgba(30, 126, 52, 0.2); }
+    100% { background: transparent; }
+}
+.status-select {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    appearance: auto;
+}
+
+/* Send All controls */
+.send-all-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    flex-wrap: wrap;
+}
+.send-all-bar select {
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--surface);
+    color: var(--text-primary);
+}
+.send-all-btn {
+    padding: 8px 20px;
+    background: #054B70;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.send-all-btn:hover { background: #043d5c; }
+.send-all-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.send-progress-panel {
+    display: none;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+.progress-bar-wrap {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 8px 0;
+}
+.progress-bar-fill {
+    height: 100%;
+    background: #054B70;
+    border-radius: 4px;
+    transition: width 0.3s;
+    width: 0%;
+}
+.progress-stats {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 16px;
+}
+.progress-stats .sent-count { color: #1e7e34; font-weight: 600; }
+.progress-stats .fail-count { color: #c0392b; font-weight: 600; }
+.eligible-count {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* TP column header groups */
+.tp-header { background: rgba(5, 75, 112, 0.06); }
+
 [data-theme="dark"] .status-active { background: #1b3a1b; color: #6fcf6f; }
+[data-theme="dark"] .status-inactive { background: #3a3a1b; color: #cfcf6f; }
 [data-theme="dark"] .status-faulty { background: #3a1b1b; color: #f06f6f; }
+[data-theme="dark"] .tp-sent-badge { background: #1b3a1b; color: #6fcf6f; }
 [data-theme="dark"] .list-table tbody tr:hover td { background: rgba(108, 180, 216, 0.06); }
+[data-theme="dark"] .editable-cell:hover { background: rgba(108, 180, 216, 0.1); }
+[data-theme="dark"] .tp-header { background: rgba(108, 180, 216, 0.06); }
+
+/* Page sub-navigation tabs */
+.page-nav-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--border);
+}
+.page-nav-tab {
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.15s;
+}
+.page-nav-tab:hover { color: var(--text-primary); }
+.page-nav-tab.active { color: #054B70; border-bottom-color: #054B70; }
+[data-theme="dark"] .page-nav-tab.active { color: #6cb4d8; border-bottom-color: #6cb4d8; }
 {% endblock %}
 
 {% block content %}
+<div class="page-nav-tabs">
+    <a href="{% url 'useu_list' %}" class="page-nav-tab active">US-EU List</a>
+    <a href="{% url 'email_templates' %}" class="page-nav-tab">Email Templates</a>
+</div>
+
 <div class="page-banner">
     <div class="banner-eyebrow">Database</div>
     <div class="banner-title">US-EU Contact List</div>
@@ -205,6 +367,38 @@
 </div>
 
 <div class="list-card">
+    <!-- Send All bar -->
+    <div class="send-all-bar">
+        <label style="font-size:13px;font-weight:600;color:var(--text-primary);">Send Touchpoint:</label>
+        <select id="tpSelect">
+            <option value="1">TP 1</option>
+            <option value="2">TP 2</option>
+            <option value="3">TP 3</option>
+            <option value="4">TP 4</option>
+            <option value="5">TP 5</option>
+            <option value="6">TP 6</option>
+            <option value="7">TP 7</option>
+            <option value="8">TP 8</option>
+            <option value="9">TP 9</option>
+            <option value="10">TP 10</option>
+        </select>
+        <button class="send-all-btn" id="sendAllBtn" onclick="startSendAll()">Send All</button>
+        <span class="eligible-count" id="eligibleCount"></span>
+    </div>
+    <!-- Progress panel -->
+    <div class="send-progress-panel" id="progressPanel">
+        <div class="progress-stats">
+            <span>Sending TP<span id="progTpNum">1</span>...</span>
+            <span>Sent: <span class="sent-count" id="progSent">0</span></span>
+            <span>Failed: <span class="fail-count" id="progFailed">0</span></span>
+            <span>of <span id="progTotal">0</span></span>
+            <span id="progCurrent" style="color:var(--text-muted);font-style:italic;"></span>
+        </div>
+        <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="progBar"></div>
+        </div>
+    </div>
+
     <div class="list-card-header">
         <div class="list-card-title">Contacts</div>
         <input type="text" class="search-box" id="searchBox" placeholder="Search by name, email, org...">
@@ -213,17 +407,32 @@
         <table class="list-table" id="listTable">
             <thead>
                 <tr>
-                    <th data-col="0">Org. Name <span class="sort-arrow">&#9650;</span></th>
-                    <th data-col="1">Default <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="1">Org. Name <span class="sort-arrow">&#9650;</span></th>
                     <th data-col="2">Contact Name <span class="sort-arrow">&#9650;</span></th>
-                    <th data-col="3">Attach <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="3">Email <span class="sort-arrow">&#9650;</span></th>
                     <th data-col="4">Phone <span class="sort-arrow">&#9650;</span></th>
-                    <th data-col="5">Email <span class="sort-arrow">&#9650;</span></th>
-                    <th data-col="6">Touchpoint 1 <span class="sort-arrow">&#9650;</span></th>
-                    <th data-col="7">TP1 Sent On <span class="sort-arrow">&#9650;</span></th>
-                    <th data-col="8">Touchpoint 2 <span class="sort-arrow">&#9650;</span></th>
-                    <th data-col="9">Last Touch <span class="sort-arrow">&#9650;</span></th>
-                    <th data-col="10">Status <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="5">Status <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="6">Last Touch <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="7" class="tp-header">TP1 <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="8" class="tp-header">TP1 Sent <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="9" class="tp-header">TP2 <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="10" class="tp-header">TP2 Sent <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="11" class="tp-header">TP3 <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="12" class="tp-header">TP3 Sent <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="13" class="tp-header">TP4 <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="14" class="tp-header">TP4 Sent <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="15" class="tp-header">TP5 <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="16" class="tp-header">TP5 Sent <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="17" class="tp-header">TP6 <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="18" class="tp-header">TP6 Sent <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="19" class="tp-header">TP7 <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="20" class="tp-header">TP7 Sent <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="21" class="tp-header">TP8 <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="22" class="tp-header">TP8 Sent <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="23" class="tp-header">TP9 <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="24" class="tp-header">TP9 Sent <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="25" class="tp-header">TP10 <span class="sort-arrow">&#9650;</span></th>
+                    <th data-col="26" class="tp-header">TP10 Sent <span class="sort-arrow">&#9650;</span></th>
                 </tr>
             </thead>
             <tbody id="tableBody"></tbody>
@@ -248,12 +457,42 @@
 {% block scripts %}
 <script>
 (function() {
+    const CSRF = '{{ csrf_token }}';
+    // Row format:
+    // 0:id, 1:org_name, 2:contact_name, 3:email, 4:phone, 5:status, 6:last_touch,
+    // 7:tp1, 8:tp1_sent, 9:tp2, 10:tp2_sent, 11:tp3, 12:tp3_sent,
+    // 13:tp4, 14:tp4_sent, 15:tp5, 16:tp5_sent, 17:tp6, 18:tp6_sent,
+    // 19:tp7, 20:tp7_sent, 21:tp8, 22:tp8_sent, 23:tp9, 24:tp9_sent,
+    // 25:tp10, 26:tp10_sent
     const allData = {{ rows_json|safe }};
     let filtered = allData;
     let perPage = 100;
     let currentPage = 1;
     let sortCol = -1;
     let sortAsc = true;
+
+    // Map column index -> DB field name for editable cells
+    const FIELD_MAP = {
+        3: 'email', 5: 'status', 6: 'last_touch',
+        7: 'touchpoint_1', 8: 'tp1_sent_on',
+        9: 'touchpoint_2', 10: 'tp2_sent_on',
+        11: 'touchpoint_3', 12: 'tp3_sent_on',
+        13: 'touchpoint_4', 14: 'tp4_sent_on',
+        15: 'touchpoint_5', 16: 'tp5_sent_on',
+        17: 'touchpoint_6', 18: 'tp6_sent_on',
+        19: 'touchpoint_7', 20: 'tp7_sent_on',
+        21: 'touchpoint_8', 22: 'tp8_sent_on',
+        23: 'touchpoint_9', 24: 'tp9_sent_on',
+        25: 'touchpoint_10', 26: 'tp10_sent_on',
+    };
+    const DATE_COLS = [8, 10, 12, 14, 16, 18, 20, 22, 24, 26];
+    const TP_STATUS_COLS = [7, 9, 11, 13, 15, 17, 19, 21, 23, 25];
+    const EDITABLE_COLS = [3, 5, 6, ...TP_STATUS_COLS, ...DATE_COLS];
+    const TOTAL_COLS = 26; // columns 1 through 26
+
+    // Build a lookup by contact ID for live updates
+    const dataById = {};
+    allData.forEach(r => { dataById[r[0]] = r; });
 
     const tbody = document.getElementById('tableBody');
     const pagBtns = document.getElementById('pagBtns');
@@ -262,28 +501,172 @@
     function statusBadge(val) {
         const v = (val || '').trim();
         if (v === 'Active') return '<span class="status-badge status-active">Active</span>';
+        if (v === 'Inactive') return '<span class="status-badge status-inactive">Inactive</span>';
         if (v === 'Faulty Data') return '<span class="status-badge status-faulty">Faulty Data</span>';
         return v;
+    }
+
+    function tpBadge(val) {
+        const v = (val || '').trim();
+        if (v === 'Sent') return '<span class="tp-sent-badge">Sent</span>';
+        return v;
+    }
+
+    function toISODate(val) {
+        if (!val) return '';
+        val = val.trim();
+        const parts = val.split('/');
+        if (parts.length === 3) {
+            let d = parts[0], m = parts[1], y = parts[2];
+            if (y.length === 4) return y + '-' + m.padStart(2, '0') + '-' + d.padStart(2, '0');
+        }
+        return val;
+    }
+
+    function fromISODate(val) {
+        if (!val) return '';
+        const parts = val.split('-');
+        if (parts.length === 3) return parseInt(parts[2]) + '/' + parseInt(parts[1]) + '/' + parts[0];
+        return val;
+    }
+
+    function saveCell(rowId, field, value, td) {
+        td.classList.add('cell-saving');
+        fetch('{% url "useu_update_cell" %}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({id: rowId, field: field, value: value})
+        })
+        .then(r => r.json())
+        .then(data => {
+            td.classList.remove('cell-saving');
+            if (data.ok) {
+                td.classList.add('cell-saved');
+                setTimeout(() => td.classList.remove('cell-saved'), 600);
+            }
+        })
+        .catch(() => td.classList.remove('cell-saving'));
+    }
+
+    function makeEditableText(td, row, col) {
+        td.addEventListener('click', function(e) {
+            if (td.querySelector('input')) return;
+            const current = row[col] || '';
+            td.innerHTML = '<input type="text" value="' + current.replace(/"/g, '&quot;') + '">';
+            const input = td.querySelector('input');
+            input.focus();
+            input.select();
+            function commit() {
+                const newVal = input.value.trim();
+                row[col] = newVal;
+                td.textContent = newVal;
+                saveCell(row[0], FIELD_MAP[col], newVal, td);
+            }
+            input.addEventListener('blur', commit);
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+                if (e.key === 'Escape') { td.textContent = row[col] || ''; }
+            });
+        });
+    }
+
+    function makeEditableDate(td, row, col) {
+        td.addEventListener('click', function(e) {
+            if (td.querySelector('input')) return;
+            const current = row[col] || '';
+            const isoVal = toISODate(current);
+            td.innerHTML = '<input type="date" value="' + isoVal + '">';
+            const input = td.querySelector('input');
+            input.focus();
+            if (input.showPicker) { try { input.showPicker(); } catch(e) {} }
+            function commit() {
+                const newVal = input.value;
+                const displayVal = fromISODate(newVal);
+                row[col] = displayVal;
+                td.textContent = displayVal;
+                saveCell(row[0], FIELD_MAP[col], displayVal, td);
+            }
+            input.addEventListener('blur', commit);
+            input.addEventListener('change', function() { input.blur(); });
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') { td.textContent = row[col] || ''; }
+            });
+        });
+    }
+
+    function makeEditableStatus(td, row, col) {
+        td.addEventListener('click', function(e) {
+            if (td.querySelector('select')) return;
+            const current = (row[col] || '').trim();
+            let html = '<select class="status-select">';
+            ['Active', 'Inactive', 'Faulty Data'].forEach(opt => {
+                html += '<option value="' + opt + '"' + (opt === current ? ' selected' : '') + '>' + opt + '</option>';
+            });
+            html += '</select>';
+            td.innerHTML = html;
+            const select = td.querySelector('select');
+            select.focus();
+            function commit() {
+                const newVal = select.value;
+                row[col] = newVal;
+                td.innerHTML = statusBadge(newVal);
+                td.className = 'editable-cell';
+                saveCell(row[0], FIELD_MAP[col], newVal, td);
+                makeEditableStatus(td, row, col);
+            }
+            select.addEventListener('blur', commit);
+            select.addEventListener('change', function() { select.blur(); });
+        });
     }
 
     function renderPage() {
         const start = (currentPage - 1) * perPage;
         const end = Math.min(start + perPage, filtered.length);
-        let html = '';
+        tbody.innerHTML = '';
+
         for (let i = start; i < end; i++) {
             const r = filtered[i];
-            html += '<tr>';
-            for (let c = 0; c < r.length - 1; c++) {
-                if (c === 10) html += '<td>' + statusBadge(r[c]) + '</td>';
-                else html += '<td>' + (r[c] || '') + '</td>';
+            const tr = document.createElement('tr');
+            tr.setAttribute('data-id', r[0]);
+
+            for (let c = 1; c <= TOTAL_COLS; c++) {
+                const td = document.createElement('td');
+
+                if (c === 5) {
+                    // Status column
+                    td.className = 'editable-cell';
+                    td.innerHTML = statusBadge(r[c]);
+                    makeEditableStatus(td, r, c);
+                } else if (TP_STATUS_COLS.includes(c)) {
+                    // TP status columns (Sent/empty)
+                    td.className = 'editable-cell';
+                    td.innerHTML = tpBadge(r[c]);
+                    td.setAttribute('data-col', c);
+                    makeEditableText(td, r, c);
+                } else if (DATE_COLS.includes(c)) {
+                    // Date columns
+                    td.className = 'editable-cell';
+                    td.textContent = r[c] || '';
+                    td.setAttribute('data-col', c);
+                    makeEditableDate(td, r, c);
+                } else if (EDITABLE_COLS.includes(c)) {
+                    td.className = 'editable-cell';
+                    td.textContent = r[c] || '';
+                    makeEditableText(td, r, c);
+                } else {
+                    td.textContent = r[c] || '';
+                }
+
+                tr.appendChild(td);
             }
-            html += '</tr>';
+            tbody.appendChild(tr);
         }
-        tbody.innerHTML = html;
+
         document.getElementById('showStart').textContent = filtered.length ? start + 1 : 0;
         document.getElementById('showEnd').textContent = end;
         document.getElementById('showTotal').textContent = filtered.length;
         renderPagination();
+        updateEligibleCount();
     }
 
     function renderPagination() {
@@ -308,6 +691,20 @@
         pagBtns.innerHTML = html;
     }
 
+    function updateEligibleCount() {
+        const tpNum = parseInt(document.getElementById('tpSelect').value);
+        const sentCol = 6 + (tpNum * 2); // tp1_sent = col 8, tp2_sent = col 10, etc.
+        let count = 0;
+        allData.forEach(r => {
+            if ((r[5] || '').trim() === 'Active' && !(r[sentCol] || '').trim() && (r[3] || '').trim()) {
+                count++;
+            }
+        });
+        document.getElementById('eligibleCount').textContent = count + ' eligible contacts';
+    }
+
+    document.getElementById('tpSelect').addEventListener('change', updateEligibleCount);
+
     window.goPage = function(p) {
         const totalPages = Math.ceil(filtered.length / perPage) || 1;
         if (p < 1 || p > totalPages) return;
@@ -330,7 +727,7 @@
             const q = searchBox.value.trim().toLowerCase();
             if (!q) { filtered = allData; }
             else {
-                filtered = allData.filter(r => r.some(cell => (cell || '').toLowerCase().includes(q)));
+                filtered = allData.filter(r => r.some(cell => (cell || '').toString().toLowerCase().includes(q)));
             }
             currentPage = 1;
             renderPage();
@@ -347,8 +744,8 @@
             this.classList.add('sorted');
             this.querySelector('.sort-arrow').innerHTML = sortAsc ? '&#9650;' : '&#9660;';
             filtered.sort((a, b) => {
-                const va = (a[col] || '').toLowerCase();
-                const vb = (b[col] || '').toLowerCase();
+                const va = (a[col] || '').toString().toLowerCase();
+                const vb = (b[col] || '').toString().toLowerCase();
                 if (va < vb) return sortAsc ? -1 : 1;
                 if (va > vb) return sortAsc ? 1 : -1;
                 return 0;
@@ -357,6 +754,128 @@
             renderPage();
         });
     });
+
+    // ── Send All ─────────────────────────────────────────────────────────────
+    let sendJobId = null;
+    let pollLastIdx = 0;
+
+    window.startSendAll = function() {
+        const tpNum = document.getElementById('tpSelect').value;
+        const btn = document.getElementById('sendAllBtn');
+        const sentCol = 6 + (parseInt(tpNum) * 2);
+
+        // Count eligible
+        let eligible = 0;
+        allData.forEach(r => {
+            if ((r[5] || '').trim() === 'Active' && !(r[sentCol] || '').trim() && (r[3] || '').trim()) eligible++;
+        });
+        if (eligible === 0) {
+            alert('No eligible contacts for TP' + tpNum + '. All active contacts already have a sent date.');
+            return;
+        }
+        if (!confirm('Send TP' + tpNum + ' to ' + eligible + ' contacts?')) return;
+
+        btn.disabled = true;
+        btn.textContent = 'Sending...';
+
+        document.getElementById('progTpNum').textContent = tpNum;
+        document.getElementById('progSent').textContent = '0';
+        document.getElementById('progFailed').textContent = '0';
+        document.getElementById('progTotal').textContent = eligible;
+        document.getElementById('progBar').style.width = '0%';
+        document.getElementById('progCurrent').textContent = '';
+        document.getElementById('progressPanel').style.display = 'block';
+
+        fetch('{% url "send_all_touchpoint" %}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({touchpoint_number: parseInt(tpNum)})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.ok) {
+                alert('Error: ' + data.error);
+                btn.disabled = false;
+                btn.textContent = 'Send All';
+                document.getElementById('progressPanel').style.display = 'none';
+                return;
+            }
+            sendJobId = data.job_id;
+            pollLastIdx = 0;
+            document.getElementById('progTotal').textContent = data.total;
+            pollProgress();
+        })
+        .catch(err => {
+            alert('Error: ' + err.message);
+            btn.disabled = false;
+            btn.textContent = 'Send All';
+        });
+    };
+
+    function pollProgress() {
+        if (!sendJobId) return;
+        const tpNum = parseInt(document.getElementById('tpSelect').value);
+        const tpStatusCol = 5 + (tpNum * 2); // tp1 = col 7, tp2 = col 9
+        const tpSentCol = 6 + (tpNum * 2);   // tp1_sent = col 8, tp2_sent = col 10
+
+        fetch('{% url "send_all_progress" %}?job_id=' + sendJobId + '&last_idx=' + pollLastIdx)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.ok) return;
+
+            document.getElementById('progSent').textContent = data.sent;
+            document.getElementById('progFailed').textContent = data.failed;
+            document.getElementById('progCurrent').textContent = data.current ? 'Sending to ' + data.current + '...' : '';
+
+            const pct = data.total > 0 ? ((data.sent + data.failed) / data.total * 100) : 0;
+            document.getElementById('progBar').style.width = pct.toFixed(1) + '%';
+
+            // Update rows in real-time
+            data.results.forEach(res => {
+                const row = dataById[res.id];
+                if (row && res.ok) {
+                    row[tpStatusCol] = 'Sent';
+                    row[tpSentCol] = res.sent_on;
+                    row[6] = String(tpNum); // last_touch
+
+                    // Update visible table row
+                    const tr = document.querySelector('tr[data-id="' + res.id + '"]');
+                    if (tr) {
+                        const tds = tr.querySelectorAll('td');
+                        // tpStatusCol-1 because td index starts at 0 for col 1
+                        if (tds[tpStatusCol - 1]) {
+                            tds[tpStatusCol - 1].innerHTML = '<span class="tp-sent-badge">Sent</span>';
+                            tds[tpStatusCol - 1].classList.add('cell-saved');
+                            setTimeout(() => tds[tpStatusCol - 1].classList.remove('cell-saved'), 600);
+                        }
+                        if (tds[tpSentCol - 1]) {
+                            tds[tpSentCol - 1].textContent = res.sent_on;
+                            tds[tpSentCol - 1].classList.add('cell-saved');
+                            setTimeout(() => tds[tpSentCol - 1].classList.remove('cell-saved'), 600);
+                        }
+                        // Last touch column (index 5, 0-based)
+                        if (tds[5]) {
+                            tds[5].textContent = String(tpNum);
+                            tds[5].classList.add('cell-saved');
+                            setTimeout(() => tds[5].classList.remove('cell-saved'), 600);
+                        }
+                    }
+                }
+            });
+            pollLastIdx = data.next_idx;
+
+            if (data.done) {
+                document.getElementById('sendAllBtn').disabled = false;
+                document.getElementById('sendAllBtn').textContent = 'Send All';
+                document.getElementById('progCurrent').textContent = 'Done!';
+                sendJobId = null;
+                updateEligibleCount();
+            } else {
+                setTimeout(pollProgress, 1000);
+            }
+        })
+        .catch(() => { setTimeout(pollProgress, 2000); });
+    }
 
     renderPage();
 })();

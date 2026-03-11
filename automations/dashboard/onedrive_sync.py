@@ -470,6 +470,15 @@ def sync_turnover_data():
             all_rows.extend(rows)
             print(f"  Extracted {len(rows)} records")
 
+    # Deduplicate: keep the row with the latest report_date for each (debtor, date, branch)
+    seen = {}
+    for row in all_rows:
+        key = (row[0], row[2], row[3])  # debtor, date, branch
+        existing = seen.get(key)
+        if existing is None or (row[5] and (not existing[5] or row[5] >= existing[5])):
+            seen[key] = row
+    all_rows = list(seen.values())
+
     # Upsert to database with report date tracking
     if all_rows:
         with connection.cursor() as cur:

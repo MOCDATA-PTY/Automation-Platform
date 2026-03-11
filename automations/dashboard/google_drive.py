@@ -14,7 +14,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
-PROGRESS_FILE = '/tmp/sync_progress.json'
+PROGRESS_FILE = os.path.join(settings.BASE_DIR, 'sync_progress.json')
 # Use settings.LAST_SYNC_FILE for consistency with onedrive_sync
 
 

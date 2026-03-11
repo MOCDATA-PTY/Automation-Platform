@@ -7,12 +7,19 @@ from django.db.models.functions import ExtractYear
 from django.db import OperationalError, ProgrammingError, connection
 from django.http import JsonResponse
 from django.conf import settings as django_settings
-from .models import TurnoverData, ProjectTask, UserProfile
+from .models import TurnoverData, ProjectTask, UserProfile, USEUContact, TouchpointTemplate
 from django.contrib.auth.models import User
 from .google_drive import sync_google_drive_data, get_progress, update_progress, get_last_sync
 from . import onedrive_sync
 import threading
 import json
+import msal
+import requests as http_requests
+import base64
+import os
+import re
+import time
+from datetime import datetime
 import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -1776,29 +1783,481 @@ def save_settings(request):
 
 @login_required
 def useu_list(request):
-    import csv
-    csv_path = os.path.join(django_settings.BASE_DIR, 'US-EU List.csv')
-    rows = []
-    active_count = 0
-    faulty_count = 0
-    try:
-        with open(csv_path, 'r', encoding='utf-8-sig') as f:
-            reader = csv.reader(f)
-            next(reader)  # skip header
-            for row in reader:
-                rows.append(row)
-                status = row[10].strip() if len(row) > 10 else ''
-                if status == 'Active':
-                    active_count += 1
-                elif status == 'Faulty Data':
-                    faulty_count += 1
-    except FileNotFoundError:
-        pass
+    # On first load, import CSV data into DB if table is empty
+    if USEUContact.objects.count() == 0:
+        import csv
+        csv_path = os.path.join(django_settings.BASE_DIR, 'US-EU List.csv')
+        try:
+            with open(csv_path, 'r', encoding='utf-8-sig') as f:
+                reader = csv.reader(f)
+                next(reader)  # skip header
+                batch = []
+                for row in reader:
+                    batch.append(USEUContact(
+                        org_name=row[0] if len(row) > 0 else '',
+                        default=row[1] if len(row) > 1 else '',
+                        contact_name=row[2] if len(row) > 2 else '',
+                        attach=row[3] if len(row) > 3 else '',
+                        phone=row[4] if len(row) > 4 else '',
+                        email=row[5] if len(row) > 5 else '',
+                        touchpoint_1=row[6] if len(row) > 6 else '',
+                        tp1_sent_on=row[7] if len(row) > 7 else '',
+                        touchpoint_2=row[8] if len(row) > 8 else '',
+                        last_touch=row[9] if len(row) > 9 else '',
+                        status=row[10].strip() if len(row) > 10 else 'Active',
+                        tp1_processing_id=row[11] if len(row) > 11 else '',
+                    ))
+                USEUContact.objects.bulk_create(batch, batch_size=1000)
+        except FileNotFoundError:
+            pass
+
+    contacts = USEUContact.objects.all()
+    total = contacts.count()
+    active_count = contacts.filter(status='Active').count()
+    faulty_count = contacts.filter(status='Faulty Data').count()
+
+    rows = list(contacts.values_list(
+        'id', 'org_name', 'contact_name', 'email', 'phone', 'status', 'last_touch',
+        'touchpoint_1', 'tp1_sent_on',
+        'touchpoint_2', 'tp2_sent_on',
+        'touchpoint_3', 'tp3_sent_on',
+        'touchpoint_4', 'tp4_sent_on',
+        'touchpoint_5', 'tp5_sent_on',
+        'touchpoint_6', 'tp6_sent_on',
+        'touchpoint_7', 'tp7_sent_on',
+        'touchpoint_8', 'tp8_sent_on',
+        'touchpoint_9', 'tp9_sent_on',
+        'touchpoint_10', 'tp10_sent_on',
+    ))
+
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     return render(request, 'useu_list.html', {
-        'rows_json': json.dumps(rows),
-        'total_rows': len(rows),
+        'rows_json': json.dumps([list(r) for r in rows]),
+        'total_rows': total,
         'active_count': active_count,
         'faulty_count': faulty_count,
         'dark_mode': profile.dark_mode,
     })
+
+
+@login_required
+def useu_update_cell(request):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST required'}, status=405)
+    try:
+        data = json.loads(request.body)
+        contact_id = data['id']
+        field = data['field']
+        value = data['value']
+    except (json.JSONDecodeError, KeyError):
+        return JsonResponse({'ok': False, 'error': 'Invalid data'}, status=400)
+
+    allowed_fields = [
+        'email', 'status', 'last_touch',
+        'touchpoint_1', 'tp1_sent_on', 'touchpoint_2', 'tp2_sent_on',
+        'touchpoint_3', 'tp3_sent_on', 'touchpoint_4', 'tp4_sent_on',
+        'touchpoint_5', 'tp5_sent_on', 'touchpoint_6', 'tp6_sent_on',
+        'touchpoint_7', 'tp7_sent_on', 'touchpoint_8', 'tp8_sent_on',
+        'touchpoint_9', 'tp9_sent_on', 'touchpoint_10', 'tp10_sent_on',
+    ]
+    if field not in allowed_fields:
+        return JsonResponse({'ok': False, 'error': 'Field not editable'}, status=400)
+
+    try:
+        contact = USEUContact.objects.get(id=contact_id)
+        setattr(contact, field, value)
+        contact.save(update_fields=[field])
+        return JsonResponse({'ok': True})
+    except USEUContact.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'Not found'}, status=404)
+
+
+# ── Send All Touchpoint ────────────────────────────────────────────────────────
+
+_send_all_progress = {}  # in-memory progress tracker
+
+@login_required
+def send_all_touchpoint(request):
+    """Send a touchpoint email to all Active contacts with empty TP sent date."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST required'}, status=405)
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON'}, status=400)
+
+    tp_num = int(data.get('touchpoint_number', 1))
+    if tp_num < 1 or tp_num > 10:
+        return JsonResponse({'ok': False, 'error': 'Invalid touchpoint number'}, status=400)
+
+    tp_field = f'touchpoint_{tp_num}'
+    tp_sent_field = f'tp{tp_num}_sent_on'
+
+    # Find eligible contacts: Active, has email, TP sent date is empty
+    filters = {'status': 'Active', tp_sent_field: ''}
+    contacts = list(USEUContact.objects.filter(**filters).exclude(email='').exclude(email__isnull=True))
+
+    if not contacts:
+        return JsonResponse({'ok': False, 'error': 'No eligible contacts found'}, status=400)
+
+    # Get template
+    try:
+        template = TouchpointTemplate.objects.get(touchpoint_number=tp_num)
+    except TouchpointTemplate.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': f'Template for TP{tp_num} not found'}, status=404)
+
+    # Init progress
+    job_id = f'tp{tp_num}_{int(datetime.now().timestamp())}'
+    _send_all_progress[job_id] = {
+        'total': len(contacts),
+        'sent': 0,
+        'failed': 0,
+        'current': '',
+        'done': False,
+        'results': [],
+    }
+
+    import threading
+    def _do_send():
+        token = _get_graph_token()
+        if not token:
+            _send_all_progress[job_id]['done'] = True
+            _send_all_progress[job_id]['error'] = 'Failed to get Graph API token'
+            return
+
+        headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+
+        body_content = template.body_html if template.body_html else template.body
+        content_type = 'HTML' if template.body_html else 'Text'
+
+        # Replace signature URL
+        if content_type == 'HTML':
+            body_content = re.sub(
+                r'https://drive\.google\.com/thumbnail\?id=[^"\'&]+(?:&amp;[^"\']*|&[^"\']*)*',
+                r'https://workspace.moc-pty.com/static/signature_waldo.png',
+                body_content,
+                flags=re.IGNORECASE
+            )
+
+        # Build attachment once
+        att_data = None
+        if template.attachment:
+            try:
+                att_path = template.attachment.path
+                with open(att_path, 'rb') as f:
+                    att_bytes = f.read()
+                raw_name = os.path.basename(att_path)
+                name_part, ext = os.path.splitext(raw_name)
+                att_name = name_part.replace('_', ' ').replace('-', ' ')
+                att_name = ' '.join(att_name.split()) + ext
+                att_data = {
+                    '@odata.type': '#microsoft.graph.fileAttachment',
+                    'name': att_name,
+                    'contentBytes': base64.b64encode(att_bytes).decode('utf-8'),
+                }
+            except Exception:
+                pass
+
+        now_str = datetime.now().strftime('%Y-%m-%d')
+
+        for contact in contacts:
+            email_addr = contact.email.strip()
+            if not email_addr:
+                continue
+
+            _send_all_progress[job_id]['current'] = email_addr
+
+            # Variable substitution
+            final_body = body_content
+            final_body = final_body.replace('{{org_name}}', contact.org_name or '')
+            final_body = final_body.replace('{{contact_name}}', contact.contact_name or '')
+            final_body = final_body.replace('{{email}}', contact.email or '')
+            final_body = final_body.replace('{{phone}}', contact.phone or '')
+            final_body = final_body.replace('{{touchpoint_number}}', str(tp_num))
+
+            subject = template.subject or ''
+            subject = subject.replace('{{org_name}}', contact.org_name or '')
+            subject = subject.replace('{{contact_name}}', contact.contact_name or '')
+
+            payload = {
+                'message': {
+                    'subject': subject,
+                    'body': {'contentType': content_type, 'content': final_body},
+                    'toRecipients': [{'emailAddress': {'address': email_addr}}],
+                },
+                'saveToSentItems': 'true',
+            }
+            if att_data:
+                payload['message']['attachments'] = [att_data]
+
+            try:
+                r = http_requests.post(
+                    f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
+                    headers=headers, json=payload, timeout=30
+                )
+                sent_ok = r.status_code == 202
+            except Exception:
+                sent_ok = False
+
+            if sent_ok:
+                _send_all_progress[job_id]['sent'] += 1
+                setattr(contact, tp_field, 'Sent')
+                setattr(contact, tp_sent_field, now_str)
+                contact.last_touch = str(tp_num)
+                contact.save(update_fields=[tp_field, tp_sent_field, 'last_touch'])
+                _send_all_progress[job_id]['results'].append({
+                    'id': contact.id, 'email': email_addr, 'ok': True, 'sent_on': now_str,
+                })
+            else:
+                _send_all_progress[job_id]['failed'] += 1
+                _send_all_progress[job_id]['results'].append({
+                    'id': contact.id, 'email': email_addr, 'ok': False,
+                })
+
+            # Rate limit: ~4 emails per second
+            time.sleep(0.25)
+
+        _send_all_progress[job_id]['done'] = True
+        _send_all_progress[job_id]['current'] = ''
+
+    t = threading.Thread(target=_do_send, daemon=True)
+    t.start()
+
+    return JsonResponse({'ok': True, 'job_id': job_id, 'total': len(contacts)})
+
+
+@login_required
+def send_all_progress(request):
+    """Poll progress of a send-all job."""
+    job_id = request.GET.get('job_id', '')
+    progress = _send_all_progress.get(job_id)
+    if not progress:
+        return JsonResponse({'ok': False, 'error': 'Job not found'}, status=404)
+
+    # Return new results since last poll
+    last_idx = int(request.GET.get('last_idx', 0))
+    new_results = progress['results'][last_idx:]
+
+    return JsonResponse({
+        'ok': True,
+        'total': progress['total'],
+        'sent': progress['sent'],
+        'failed': progress['failed'],
+        'current': progress['current'],
+        'done': progress['done'],
+        'results': new_results,
+        'next_idx': len(progress['results']),
+    })
+
+
+# ── Email Templates ────────────────────────────────────────────────────────────
+
+@login_required
+def email_templates(request):
+    """Email template editor for touchpoints 1-10"""
+    tpl_list = []
+    for t in TouchpointTemplate.objects.all():
+        tpl_list.append({
+            'touchpoint_number': t.touchpoint_number,
+            'subject': t.subject,
+            'body': t.body,
+            'body_html': t.body_html,
+            'signature': t.signature,
+            'attachment_name': t.attachment.name.split('/')[-1] if t.attachment else '',
+            'attachment_url': t.attachment.url if t.attachment else '',
+            'days_after_previous': t.days_after_previous,
+        })
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    return render(request, 'email_templates.html', {
+        'templates_json': json.dumps(tpl_list),
+        'dark_mode': profile.dark_mode,
+    })
+
+
+@login_required
+def email_template_save(request):
+    """Save a touchpoint email template (multipart form for file upload)"""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST required'}, status=405)
+    try:
+        tp_num = int(request.POST.get('touchpoint_number', 0))
+        if tp_num < 1 or tp_num > 10:
+            return JsonResponse({'ok': False, 'error': 'Invalid touchpoint number'}, status=400)
+    except (ValueError, TypeError):
+        return JsonResponse({'ok': False, 'error': 'Invalid data'}, status=400)
+
+    defaults = {
+        'subject': request.POST.get('subject', ''),
+        'body': request.POST.get('body', ''),
+        'body_html': request.POST.get('body_html', ''),
+        'signature': request.POST.get('signature', ''),
+        'days_after_previous': int(request.POST.get('days_after_previous', 7)),
+    }
+
+    template, _ = TouchpointTemplate.objects.update_or_create(
+        touchpoint_number=tp_num, defaults=defaults
+    )
+
+    # Handle file attachment
+    if 'attachment' in request.FILES:
+        template.attachment = request.FILES['attachment']
+        template.save(update_fields=['attachment'])
+    elif request.POST.get('clear_attachment') == '1':
+        if template.attachment:
+            template.attachment.delete(save=False)
+            template.attachment = None
+            template.save(update_fields=['attachment'])
+
+    att_name = template.attachment.name.split('/')[-1] if template.attachment else ''
+    att_url = template.attachment.url if template.attachment else ''
+    return JsonResponse({
+        'ok': True,
+        'attachment_name': att_name,
+        'attachment_url': att_url,
+        'body_html': template.body_html,
+    })
+
+
+# ── Send Touchpoint Email ─────────────────────────────────────────────────────
+
+GRAPH_CLIENT_ID = '43fbe5a9-6b5b-4c81-9067-7aff9ac3ed5a'
+GRAPH_TENANT_ID = 'b1504b1d-d096-409a-a0f0-6cc546dde993'
+GRAPH_CLIENT_SECRET = 'w6B8Q~W3ac9klXa8NkMDo4cPNyOsjEryVL5TwdhQ'
+GRAPH_MAILBOX = 'waldogaybba@moc-pty.com'
+
+
+def _get_graph_token():
+    app = msal.ConfidentialClientApplication(
+        GRAPH_CLIENT_ID,
+        authority=f'https://login.microsoftonline.com/{GRAPH_TENANT_ID}',
+        client_credential=GRAPH_CLIENT_SECRET,
+    )
+    result = app.acquire_token_for_client(scopes=['https://graph.microsoft.com/.default'])
+    return result.get('access_token')
+
+
+@login_required
+def send_touchpoint(request):
+    """Send a touchpoint email to specific contacts via Microsoft Graph API."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON'}, status=400)
+
+    tp_num = data.get('touchpoint_number', 1)
+    recipients = data.get('recipients', [])  # list of email addresses
+
+    if not recipients:
+        return JsonResponse({'ok': False, 'error': 'No recipients specified'}, status=400)
+
+    try:
+        template = TouchpointTemplate.objects.get(touchpoint_number=tp_num)
+    except TouchpointTemplate.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': f'Template for TP{tp_num} not found'}, status=404)
+
+    token = _get_graph_token()
+    if not token:
+        return JsonResponse({'ok': False, 'error': 'Failed to get Graph API token'}, status=500)
+
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json',
+    }
+
+    # Determine email body
+    if template.body_html:
+        body_content = template.body_html
+        content_type = 'HTML'
+    else:
+        body_content = template.body
+        if template.signature:
+            body_content += '\n\n' + template.signature
+        content_type = 'Text'
+
+    # Replace Google Drive signature URLs with server-hosted image
+    if content_type == 'HTML':
+        import re
+        body_content = re.sub(
+            r'https://drive\.google\.com/thumbnail\?id=[^"\'&]+(?:&amp;[^"\']*|&[^"\']*)*',
+            r'https://workspace.moc-pty.com/static/signature_waldo.png',
+            body_content,
+            flags=re.IGNORECASE
+        )
+
+    results = []
+    for email_addr in recipients:
+        email_addr = email_addr.strip()
+        if not email_addr:
+            continue
+
+        # Look up contact for variable substitution
+        contact = USEUContact.objects.filter(email__iexact=email_addr).first()
+        final_body = body_content
+        if contact:
+            final_body = final_body.replace('{{org_name}}', contact.org_name or '')
+            final_body = final_body.replace('{{contact_name}}', contact.contact_name or '')
+            final_body = final_body.replace('{{email}}', contact.email or '')
+            final_body = final_body.replace('{{phone}}', contact.phone or '')
+            final_body = final_body.replace('{{touchpoint_number}}', str(tp_num))
+
+        subject = template.subject
+        if contact:
+            subject = subject.replace('{{org_name}}', contact.org_name or '')
+            subject = subject.replace('{{contact_name}}', contact.contact_name or '')
+
+        payload = {
+            'message': {
+                'subject': subject,
+                'body': {
+                    'contentType': content_type,
+                    'content': final_body,
+                },
+                'toRecipients': [
+                    {'emailAddress': {'address': email_addr}}
+                ],
+            },
+            'saveToSentItems': 'true',
+        }
+
+        # Build attachments list
+        attachments = []
+        if template.attachment:
+            try:
+                att_path = template.attachment.path
+                with open(att_path, 'rb') as f:
+                    att_bytes = f.read()
+                raw_name = os.path.basename(att_path)
+                name_part, ext = os.path.splitext(raw_name)
+                att_name = name_part.replace('_', ' ').replace('-', ' ')
+                att_name = ' '.join(att_name.split()) + ext
+                attachments.append({
+                    '@odata.type': '#microsoft.graph.fileAttachment',
+                    'name': att_name,
+                    'contentBytes': base64.b64encode(att_bytes).decode('utf-8'),
+                })
+            except Exception:
+                pass
+        if attachments:
+            payload['message']['attachments'] = attachments
+
+        r = http_requests.post(
+            f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
+            headers=headers,
+            json=payload,
+        )
+
+        sent_ok = r.status_code == 202
+        results.append({'email': email_addr, 'ok': sent_ok, 'status': r.status_code})
+
+        # Update contact record if sent successfully
+        if sent_ok and contact:
+            tp_field = f'touchpoint_{tp_num}'
+            tp_sent_field = f'tp{tp_num}_sent_on'
+            now_str = datetime.now().strftime('%Y-%m-%d')
+            update_fields = {tp_field: 'Sent', tp_sent_field: now_str, 'last_touch': str(tp_num)}
+            USEUContact.objects.filter(id=contact.id).update(**update_fields)
+
+    return JsonResponse({'ok': True, 'results': results})
