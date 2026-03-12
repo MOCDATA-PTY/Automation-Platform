@@ -704,6 +704,49 @@
             if (window.innerWidth <= 768) closeMobileSidebar();
         });
     });
+
+    // Touchpoint Progress Auto-Update
+    function updateTouchpointProgress() {
+        // Get current TP type from the page
+        const currentTP = document.querySelector('[data-tp-type]')?.dataset.tpType || 'tp1';
+        
+        fetch(`/api/tp-progress/?tp_type=${currentTP}`)
+            .then(response => response.json())
+            .then(data => {
+                const statusElement = document.querySelector('.tp-status');
+                if (statusElement && data.status === 'sending') {
+                    statusElement.style.display = 'block';
+                    statusElement.innerHTML = `
+                        <strong>Sending ${currentTP.toUpperCase()}:</strong><br>
+                        Sent ${data.sent_count} of ${data.total_contacts}<br>
+                        Failed: ${data.failed_count}<br>
+                        ${data.current_email ? `Sending ${data.sent_count + 1} of ${data.total_contacts} — ${data.current_email}` : ''}
+                    `;
+                } else if (statusElement && data.status === 'idle' && (data.sent_count > 0 || data.failed_count > 0)) {
+                    statusElement.style.display = 'block';
+                    statusElement.innerHTML = `
+                        <strong>${currentTP.toUpperCase()} Complete:</strong><br>
+                        Sent ${data.sent_count} of ${data.total_contacts}<br>
+                        Failed: ${data.failed_count}
+                    `;
+                } else if (statusElement) {
+                    statusElement.style.display = 'none';
+                }
+            })
+            .catch(err => console.log('Progress update error:', err));
+    }
+
+    // Auto-refresh every 2 seconds if sending
+    setInterval(() => {
+        const statusElement = document.querySelector('.tp-status');
+        if (statusElement && (statusElement.innerHTML.includes('Sending') || statusElement.innerHTML === '')) {
+            updateTouchpointProgress();
+        }
+    }, 2000);
+
+    // Load progress on page load
+    document.addEventListener('DOMContentLoaded', updateTouchpointProgress);
+    
     </script>
 </body>
 </html>

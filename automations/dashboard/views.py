@@ -1953,6 +1953,10 @@ def send_all_touchpoint(request):
         'results': [],
     }
 
+    # Initialize persistent touchpoint progress
+    tp_type = f'tp{tp_num}'
+    update_touchpoint_progress(tp_type, total=len(contacts), sent=0, failed=0, status="sending")
+
     import threading
     import concurrent.futures
 
@@ -2040,6 +2044,8 @@ def send_all_touchpoint(request):
 
                 with _progress_lock:
                     _send_all_progress[job_id]['current'] = email_addr
+                    # Update persistent progress
+                    update_touchpoint_progress(tp_type, current_email=email_addr)
 
                 # Variable substitution
                 final_body = body_content
@@ -2088,11 +2094,15 @@ def send_all_touchpoint(request):
                         _send_all_progress[job_id]['results'].append({
                             'id': contact.id, 'email': email_addr, 'ok': True, 'sent_on': now_str,
                         })
+                        # Update persistent progress
+                        update_touchpoint_progress(tp_type, sent=_send_all_progress[job_id]['sent'])
                     else:
                         _send_all_progress[job_id]['failed'] += 1
                         _send_all_progress[job_id]['results'].append({
                             'id': contact.id, 'email': email_addr, 'ok': False,
                         })
+                        # Update persistent progress
+                        update_touchpoint_progress(tp_type, failed=_send_all_progress[job_id]['failed'])
             except Exception:
                 # Catch-all: never let one contact crash the entire send job
                 with _progress_lock:
@@ -2111,6 +2121,8 @@ def send_all_touchpoint(request):
         finally:
             _send_all_progress[job_id]['done'] = True
             _send_all_progress[job_id]['current'] = ''
+            # Mark touchpoint as completed
+            update_touchpoint_progress(tp_type, status="idle")
 
     t = threading.Thread(target=_do_send, daemon=True)
     t.start()
@@ -2527,3 +2539,82 @@ def send_touchpoint(request):
             USEUContact.objects.filter(id=contact.id).update(**update_fields)
 
     return JsonResponse({'ok': True, 'results': results})
+
+
+# Touchpoint Progress Tracking
+def update_touchpoint_progress(tp_type, total=None, sent=None, failed=None, current_email="", status="idle"):
+    """Update touchpoint sending progress"""
+    import json
+    import os
+    from datetime import datetime
+    
+    progress_file = os.path.join(os.path.dirname(__file__), '..', 'touchpoint_progress.json')
+    
+    try:
+        if os.path.exists(progress_file):
+            with open(progress_file, 'r') as f:
+                progress = json.load(f)
+        else:
+            progress = {}
+        
+        if tp_type not in progress:
+            progress[tp_type] = {}
+        
+        # Update provided values
+        if total is not None:
+            progress[tp_type]['total_contacts'] = total
+        if sent is not None:
+            progress[tp_type]['sent_count'] = sent
+        if failed is not None:
+            progress[tp_type]['failed_count'] = failed
+        if current_email:
+            progress[tp_type]['current_email'] = current_email
+        
+        progress[tp_type]['status'] = status
+        progress[tp_type]['last_updated'] = datetime.now().isoformat()
+        
+        if status == "sending" and 'started_at' not in progress[tp_type]:
+            progress[tp_type]['started_at'] = datetime.now().isoformat()
+        elif status == "idle":
+            progress[tp_type]['started_at'] = None
+            
+        with open(progress_file, 'w') as f:
+            json.dump(progress, f, indent=2)
+    except Exception as e:
+        print(f"Error updating touchpoint progress: {e}")
+
+def get_touchpoint_progress(tp_type):
+    """Get touchpoint sending progress"""
+    import json
+    import os
+    
+    progress_file = os.path.join(os.path.dirname(__file__), '..', 'touchpoint_progress.json')
+    
+    try:
+        if os.path.exists(progress_file):
+            with open(progress_file, 'r') as f:
+                progress = json.load(f)
+                return progress.get(tp_type, {
+                    'total_contacts': 0,
+                    'sent_count': 0,
+                    'failed_count': 0,
+                    'current_email': '',
+                    'status': 'idle'
+                })
+    except Exception as e:
+        print(f"Error reading touchpoint progress: {e}")
+    
+    return {
+        'total_contacts': 0,
+        'sent_count': 0,
+        'failed_count': 0,
+        'current_email': '',
+        'status': 'idle'
+    }
+
+@require_http_methods(["GET"])
+def get_tp_progress(request):
+    """AJAX endpoint to get touchpoint progress"""
+    tp_type = request.GET.get('tp_type', 'tp1')
+    progress = get_touchpoint_progress(tp_type)
+    return JsonResponse(progress)

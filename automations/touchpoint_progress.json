@@ -1,0 +1,29 @@
+{
+    "tp1": {
+        "total_contacts": 0,
+        "sent_count": 0,
+        "failed_count": 0,
+        "current_email": "",
+        "started_at": null,
+        "last_updated": null,
+        "status": "idle"
+    },
+    "tp2": {
+        "total_contacts": 0,
+        "sent_count": 0,
+        "failed_count": 0,
+        "current_email": "",
+        "started_at": null,
+        "last_updated": null,
+        "status": "idle"
+    },
+    "tp3": {
+        "total_contacts": 0,
+        "sent_count": 0,
+        "failed_count": 0,
+        "current_email": "",
+        "started_at": null,
+        "last_updated": null,
+        "status": "idle"
+    }
+}

@@ -388,7 +388,7 @@
 
 <div class="list-card">
     <!-- Send All bar -->
-    <div class="send-all-bar">
+    <div class="send-all-bar" data-tp-type="tp1">
         <label style="font-size:13px;font-weight:600;color:var(--text-primary);">Send Touchpoint:</label>
         <select id="tpSelect">
             <option value="1">TP 1</option>
@@ -405,6 +405,10 @@
         <button class="send-all-btn" id="sendAllBtn" onclick="startSendAll()">Send All</button>
         <span class="eligible-count" id="eligibleCount"></span>
     </div>
+    
+    <!-- Persistent Progress Status -->
+    <div class="tp-status" style="margin: 10px 0; padding: 10px; background: var(--surface2); border-radius: 4px; font-size: 13px; display: none;"></div>
+    
     <!-- Progress panel -->
     <div class="send-progress-panel" id="progressPanel">
         <div class="progress-stats">
@@ -723,7 +727,11 @@
         document.getElementById('eligibleCount').textContent = '';
     }
 
-    document.getElementById('tpSelect').addEventListener('change', function() {});
+    document.getElementById('tpSelect').addEventListener('change', function() {
+        // Update data-tp-type when touchpoint changes
+        const selectedTP = this.value;
+        document.querySelector('[data-tp-type]').setAttribute('data-tp-type', `tp${selectedTP}`);
+    });
 
     function fetchPage(page, search, pp) {
         const url = '{% url "useu_list" %}?page=' + page + '&per_page=' + pp + '&search=' + encodeURIComponent(search || '');
