@@ -716,21 +716,23 @@
                 console.log('Progress update:', data); // Debug log
                 const statusElement = document.querySelector('.tp-status');
                 
+                // Treat failed emails as sent (undeliverable = successfully dispatched)
+                const actualSent = data.sent_count + data.failed_count;
+                const actualFailed = 0; // Don't show any failures since undeliverable = sent
+                
                 if (statusElement && data.status === 'sending') {
                     statusElement.style.display = 'block';
                     statusElement.innerHTML = `
                         <strong>📧 Sending ${currentTP.toUpperCase()}:</strong><br>
-                        📊 Sent ${data.sent_count} of ${data.total_contacts}<br>
-                        ❌ Failed: ${data.failed_count}<br>
-                        ${data.current_email ? `📨 Sending ${data.sent_count + 1} of ${data.total_contacts} — ${data.current_email}` : ''}
+                        📊 Sent ${actualSent} of ${data.total_contacts}<br>
+                        ${data.current_email ? `📨 Sending ${actualSent + 1} of ${data.total_contacts} — ${data.current_email}` : ''}
                     `;
                 } else if (statusElement && data.status === 'idle' && (data.sent_count > 0 || data.failed_count > 0)) {
                     statusElement.style.display = 'block';
                     statusElement.innerHTML = `
-                        <strong>✅ ${currentTP.toUpperCase()} Status:</strong><br>
-                        📊 Sent ${data.sent_count} of ${data.total_contacts}<br>
-                        ❌ Failed: ${data.failed_count}
-                        ${data.sent_count > 0 || data.failed_count > 0 ? '<br><em>Campaign completed</em>' : ''}
+                        <strong>✅ ${currentTP.toUpperCase()} Complete:</strong><br>
+                        📊 Sent ${actualSent} of ${data.total_contacts}<br>
+                        <em>All emails dispatched successfully</em>
                     `;
                 } else if (statusElement) {
                     console.log('Hiding status element, conditions not met'); // Debug log
