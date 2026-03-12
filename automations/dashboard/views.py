@@ -2080,24 +2080,42 @@ def send_all_touchpoint(request):
                 if att_list:
                     payload['message']['attachments'] = att_list
 
-                # Send via direct HTTP request (not _graph_send_mail which has issues)
+                # Send via direct HTTP request with 429 retry logic
                 print(f"[BULK DEBUG] Sending to: {email_addr}, From: {GRAPH_MAILBOX}, Subject: {subject}")
                 
-                try:
-                    headers_send = {'Authorization': f'Bearer {current_token}', 'Content-Type': 'application/json'}
-                    r = http_requests.post(
-                        f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
-                        headers=headers_send,
-                        json=payload,
-                        timeout=60
-                    )
-                    sent_ok = r.status_code == 202
-                    _status = r.status_code
-                    print(f"[BULK DEBUG] Result for {email_addr}: success={sent_ok}, status={_status}")
-                except Exception as e:
-                    print(f"[BULK DEBUG] Exception for {email_addr}: {e}")
-                    sent_ok = False
-                    _status = 0
+                sent_ok = False
+                _status = 0
+                max_retries = 5
+                
+                for attempt in range(max_retries):
+                    try:
+                        headers_send = {'Authorization': f'Bearer {current_token}', 'Content-Type': 'application/json'}
+                        r = http_requests.post(
+                            f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
+                            headers=headers_send,
+                            json=payload,
+                            timeout=60
+                        )
+                        _status = r.status_code
+                        
+                        if _status == 202:
+                            sent_ok = True
+                            break
+                        elif _status == 429:
+                            # Rate limited - retry with backoff
+                            retry_after = int(r.headers.get('Retry-After', 10))
+                            print(f"[BULK DEBUG] 429 Rate limit for {email_addr}, waiting {retry_after}s...")
+                            time.sleep(retry_after + attempt * 5)
+                            continue
+                        else:
+                            # Other error - don't retry
+                            break
+                    except Exception as e:
+                        print(f"[BULK DEBUG] Exception for {email_addr}: {e}")
+                        _status = 0
+                        time.sleep(3 * (attempt + 1))
+                
+                print(f"[BULK DEBUG] Result for {email_addr}: success={sent_ok}, status={_status}")
                 if sent_ok:
                     # Gradually speed up after success (min 1.5s for ~7 MB payloads)
                     _throttle[0] = max(_throttle[0] * 0.95, 1.5)
