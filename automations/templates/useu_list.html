@@ -797,13 +797,8 @@
         btn.disabled = true;
         btn.textContent = 'Sending...';
 
-        document.getElementById('progTpNum').textContent = tpNum;
-        document.getElementById('progSent').textContent = '0';
-        document.getElementById('progFailed').textContent = '0';
-        document.getElementById('progTotal').textContent = '...';
-        document.getElementById('progBar').style.width = '0%';
-        document.getElementById('progCurrent').textContent = '';
-        document.getElementById('progressPanel').style.display = 'block';
+        // Update data-tp-type when touchpoint changes
+        document.querySelector('[data-tp-type]').setAttribute('data-tp-type', `tp${tpNum}`);
 
         fetch('{% url "send_all_touchpoint" %}', {
             method: 'POST',
