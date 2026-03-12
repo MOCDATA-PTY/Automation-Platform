@@ -173,16 +173,125 @@ def run_custom_campaign():
     else:
         print(f"❌ Campaign failed: {result}")
 
+def run_test_campaign():
+    print("🧪 Test Email Campaign (sends to ethansevenster5@gmail.com)")
+    
+    # Authenticate user
+    print("🔐 Authenticating...")
+    try:
+        user = User.objects.get(username='Ethan')
+        print("✅ User authenticated")
+    except User.DoesNotExist:
+        print("❌ User 'Ethan' not found")
+        return
+    
+    while True:
+        try:
+            tp_num = int(input("Enter touchpoint number to test (1-10): "))
+            if 1 <= tp_num <= 10:
+                break
+            else:
+                print("Please enter a number between 1 and 10")
+        except ValueError:
+            print("Please enter a valid number")
+    
+    print(f"🧪 This will send 1 test TP{tp_num} email to ethansevenster5@gmail.com")
+    response = input("Continue? (y/N): ")
+    if response.lower() != 'y':
+        print("🛑 Test cancelled")
+        return
+    
+    # Get any contact for template data
+    test_contact = USEUContact.objects.filter(status='Active').first()
+    if not test_contact:
+        print("❌ No contacts found for template data")
+        return
+    
+    print(f"📧 Using contact data from: {test_contact.org_name} for template")
+    
+    # Import the direct sending logic
+    from dashboard.views import _get_graph_token, _graph_send_mail, GRAPH_MAILBOX
+    from dashboard.models import TouchpointTemplate
+    import datetime
+    
+    # Get template
+    try:
+        template = TouchpointTemplate.objects.get(touchpoint_number=tp_num)
+        print(f"✅ Got TP{tp_num} template: {template.subject}")
+    except TouchpointTemplate.DoesNotExist:
+        print(f"❌ TP{tp_num} template not found")
+        return
+    
+    # Get Graph token
+    print("📡 Getting Graph API token...")
+    token = _get_graph_token()
+    if not token:
+        print("❌ Failed to get Graph API token")
+        return
+    print("✅ Got Graph API token")
+    
+    # Build test email
+    body_content = template.body_html if template.body_html else template.body
+    content_type = 'HTML' if template.body_html else 'Text'
+    
+    # Variable substitution using test contact data
+    final_body = body_content
+    final_body = final_body.replace('{{org_name}}', test_contact.org_name or 'TEST COMPANY')
+    final_body = final_body.replace('{{contact_name}}', test_contact.contact_name or 'TEST CONTACT')
+    final_body = final_body.replace('{{email}}', 'ethansevenster5@gmail.com')
+    final_body = final_body.replace('{{phone}}', test_contact.phone or 'TEST PHONE')
+    final_body = final_body.replace('{{touchpoint_number}}', str(tp_num))
+    
+    # Add test notice to email
+    if content_type == 'HTML':
+        test_notice = '<div style="background:#ffeb3b;padding:10px;margin-bottom:20px;border:2px solid #f57f17;"><strong>🧪 TEST EMAIL</strong> - This is a test of TP' + str(tp_num) + ' sent from the terminal campaign runner.</div>'
+        final_body = test_notice + final_body
+    else:
+        final_body = f"🧪 TEST EMAIL - This is a test of TP{tp_num} sent from the terminal campaign runner.\n\n" + final_body
+    
+    subject = template.subject or f'TP{tp_num} Test'
+    subject = subject.replace('{{org_name}}', test_contact.org_name or 'TEST COMPANY')
+    subject = subject.replace('{{contact_name}}', test_contact.contact_name or 'TEST CONTACT')
+    subject = f"🧪 TEST - {subject}"
+    
+    # Build payload
+    payload = {
+        'message': {
+            'subject': subject,
+            'body': {'contentType': content_type, 'content': final_body},
+            'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
+            'toRecipients': [{'emailAddress': {'address': 'ethansevenster5@gmail.com', 'name': 'Ethan Test'}}],
+        },
+        'saveToSentItems': True,
+    }
+    
+    print(f"📧 Sending test email...")
+    print(f"   📤 From: {GRAPH_MAILBOX}")
+    print(f"   📬 To: ethansevenster5@gmail.com")
+    print(f"   📝 Subject: {subject}")
+    
+    # Send the email
+    sent_ok, status_code = _graph_send_mail(token, payload)
+    
+    if sent_ok:
+        print(f"✅ TEST EMAIL SENT SUCCESSFULLY! Status: {status_code}")
+        print("📬 Check ethansevenster5@gmail.com inbox (and spam folder)")
+        print("📤 Email should also appear in waldogaybba@moc-pty.com sent items")
+        return True
+    else:
+        print(f"❌ TEST EMAIL FAILED! Status: {status_code}")
+        return False
 if __name__ == "__main__":
     print("📧 Touchpoint Email Campaign Runner")
     print("=" * 40)
     print("1. Run TP1 Campaign (Full)")
     print("2. Custom Touchpoint Campaign")
-    print("3. Exit")
+    print("3. Test Email to ethansevenster5@gmail.com")
+    print("4. Exit")
     
     while True:
         try:
-            choice = input("\nSelect option (1-3): ").strip()
+            choice = input("\nSelect option (1-4): ").strip()
             
             if choice == '1':
                 run_tp1_campaign()
@@ -191,10 +300,13 @@ if __name__ == "__main__":
                 run_custom_campaign()
                 break
             elif choice == '3':
+                run_test_campaign()
+                break
+            elif choice == '4':
                 print("👋 Goodbye!")
                 break
             else:
-                print("Please enter 1, 2, or 3")
+                print("Please enter 1, 2, 3, or 4")
         except KeyboardInterrupt:
             print("\n👋 Goodbye!")
             break
