@@ -2070,7 +2070,7 @@ def send_all_touchpoint(request):
                         'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
                         'toRecipients': [{'emailAddress': {'address': email_addr}}],
                     },
-                    'saveToSentItems': False,  # Disable to avoid permission issues
+                    'saveToSentItems': True,  # Save to sent items in shared mailbox
                 }
                 att_list = []
                 if att_data:
