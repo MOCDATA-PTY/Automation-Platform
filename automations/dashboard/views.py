@@ -1958,213 +1958,29 @@ def send_all_touchpoint(request):
     tp_type = f'tp{tp_num}'
     update_touchpoint_progress(tp_type, total=len(contacts), sent=0, failed=0, status="sending")
 
-    import threading
-    import concurrent.futures
+    import subprocess
+    import sys as _sys
 
-    def _do_send():
-        token = _get_graph_token()
-        if not token:
-            _send_all_progress[job_id]['done'] = True
-            _send_all_progress[job_id]['error'] = 'Failed to get Graph API token'
-            return
+    # Pre-create the job file so progress polling works before the subprocess starts
+    _job_file = os.path.join(os.path.dirname(__file__), '..', f'send_job_{job_id}.json')
+    try:
+        import tempfile as _tempfile
+        _fd, _tmp = _tempfile.mkstemp(dir=os.path.dirname(_job_file), suffix='.tmp')
+        with os.fdopen(_fd, 'w') as _f:
+            json.dump({'total': len(contacts), 'sent': 0, 'failed': 0, 'current': '', 'done': False, 'results': []}, _f)
+        os.replace(_tmp, _job_file)
+    except Exception:
+        pass
 
-        # Token auto-refresh for long-running jobs (tokens expire after 1 hour)
-        token_lock = threading.Lock()
-        token_data = {'value': token, 'obtained': time.time()}
+    # Launch the worker as a detached subprocess so it survives gunicorn restarts
+    _worker = os.path.join(os.path.dirname(__file__), '..', 'send_campaign_worker.py')
+    subprocess.Popen(
+        [_sys.executable, _worker, '--tp-num', str(tp_num), '--job-id', job_id],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,  # detach from gunicorn's process group
+    )
 
-        def _fresh_token():
-            with token_lock:
-                if time.time() - token_data['obtained'] > 2700:  # refresh after 45 min
-                    new_tok = _get_graph_token()
-                    if new_tok:
-                        token_data['value'] = new_tok
-                        token_data['obtained'] = time.time()
-                return token_data['value']
-
-        body_content = template.body_html if template.body_html else template.body
-        content_type = 'HTML' if template.body_html else 'Text'
-
-        # Embed signature as inline CID attachment instead of external URL
-        sig_inline = None
-        if content_type == 'HTML':
-            body_content = re.sub(
-                r'https://drive\.google\.com/thumbnail\?id=[^"\'&]+(?:&amp;[^"\']*|&[^"\']*)*',
-                r'cid:signature_waldo',
-                body_content,
-                flags=re.IGNORECASE
-            )
-            sig_path = os.path.join(django_settings.BASE_DIR, 'static', 'signature_waldo.png')
-            if os.path.isfile(sig_path):
-                with open(sig_path, 'rb') as sf:
-                    sig_inline = {
-                        '@odata.type': '#microsoft.graph.fileAttachment',
-                        'name': 'signature_waldo.png',
-                        'contentType': 'image/png',
-                        'contentBytes': base64.b64encode(sf.read()).decode('utf-8'),
-                        'contentId': 'signature_waldo',
-                        'isInline': True,
-                    }
-
-        # Build attachment once
-        att_data = None
-        if template.attachment:
-            try:
-                att_path = template.attachment.path
-                with open(att_path, 'rb') as f:
-                    att_bytes = f.read()
-                raw_name = os.path.basename(att_path)
-                name_part, ext = os.path.splitext(raw_name)
-                att_name = name_part.replace('_', ' ').replace('-', ' ')
-                att_name = ' '.join(att_name.split()) + ext
-                att_data = {
-                    '@odata.type': '#microsoft.graph.fileAttachment',
-                    'name': att_name,
-                    'contentBytes': base64.b64encode(att_bytes).decode('utf-8'),
-                }
-            except Exception:
-                pass
-
-        now_str = datetime.now().strftime('%d/%m/%Y')
-        _progress_lock = threading.Lock()
-        # Adaptive throttle: all threads share this delay (seconds between sends)
-        # With ~7 MB per email, start conservatively to avoid Graph 429 throttling
-        _throttle = [3.0]  # start at 3s per thread → 2 threads ≈ 1 send every 1.5s
-
-        def _send_one(contact):
-            try:
-                email_addr = contact.email.strip()
-                if not email_addr:
-                    return
-
-                # Rate-limit: sleep before each send to avoid blasting the API
-                time.sleep(_throttle[0])
-
-                test_override = getattr(django_settings, 'TEST_EMAIL_OVERRIDE', None)
-                if test_override:
-                    email_addr = test_override
-
-                with _progress_lock:
-                    _send_all_progress[job_id]['current'] = email_addr
-                    # Update persistent progress
-                    update_touchpoint_progress(tp_type, current_email=email_addr)
-
-                # Variable substitution
-                final_body = body_content
-                final_body = final_body.replace('{{org_name}}', contact.org_name or '')
-                final_body = final_body.replace('{{contact_name}}', contact.contact_name or '')
-                final_body = final_body.replace('{{email}}', contact.email or '')
-                final_body = final_body.replace('{{phone}}', contact.phone or '')
-                final_body = final_body.replace('{{touchpoint_number}}', str(tp_num))
-
-                subject = template.subject or ''
-                subject = subject.replace('{{org_name}}', contact.org_name or '')
-                subject = subject.replace('{{contact_name}}', contact.contact_name or '')
-
-                current_token = _fresh_token()
-                headers = {'Authorization': f'Bearer {current_token}', 'Content-Type': 'application/json'}
-
-                payload = {
-                    'message': {
-                        'subject': subject,
-                        'body': {'contentType': content_type, 'content': final_body},
-                        'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
-                        'toRecipients': [{'emailAddress': {'address': email_addr}}],
-                    },
-                    'saveToSentItems': True,  # Save to sent items in shared mailbox
-                }
-                att_list = []
-                if att_data:
-                    att_list.append(att_data)
-                if sig_inline:
-                    att_list.append(sig_inline)
-                if att_list:
-                    payload['message']['attachments'] = att_list
-
-                # Send via direct HTTP request with 429 retry logic
-                print(f"[BULK DEBUG] Sending to: {email_addr}, From: {GRAPH_MAILBOX}, Subject: {subject}")
-                
-                sent_ok = False
-                _status = 0
-                max_retries = 5
-                
-                for attempt in range(max_retries):
-                    try:
-                        headers_send = {'Authorization': f'Bearer {current_token}', 'Content-Type': 'application/json'}
-                        r = http_requests.post(
-                            f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
-                            headers=headers_send,
-                            json=payload,
-                            timeout=60
-                        )
-                        _status = r.status_code
-                        
-                        if _status == 202:
-                            sent_ok = True
-                            break
-                        elif _status == 429:
-                            # Rate limited - retry with backoff
-                            retry_after = int(r.headers.get('Retry-After', 10))
-                            print(f"[BULK DEBUG] 429 Rate limit for {email_addr}, waiting {retry_after}s...")
-                            time.sleep(retry_after + attempt * 5)
-                            continue
-                        else:
-                            # Other error - don't retry
-                            break
-                    except Exception as e:
-                        print(f"[BULK DEBUG] Exception for {email_addr}: {e}")
-                        _status = 0
-                        time.sleep(3 * (attempt + 1))
-                
-                print(f"[BULK DEBUG] Result for {email_addr}: success={sent_ok}, status={_status}")
-                if sent_ok:
-                    # Gradually speed up after success (min 1.5s for ~7 MB payloads)
-                    _throttle[0] = max(_throttle[0] * 0.95, 1.5)
-
-                with _progress_lock:
-                    # Count as "sent" if it went out successfully OR if it's an undeliverable address
-                    # (because undeliverable means we sent it, it just bounced back)
-                    if sent_ok or _status in [400, 404, 422]:  # Bad request, not found, unprocessable (undeliverable)
-                        _send_all_progress[job_id]['sent'] += 1
-                        setattr(contact, tp_sent_field, now_str)
-                        contact.last_touch = str(tp_num)
-                        contact.save(update_fields=[tp_sent_field, 'last_touch'])
-                        _send_all_progress[job_id]['results'].append({
-                            'id': contact.id, 'email': email_addr, 'ok': True, 'sent_on': now_str,
-                        })
-                        # Update persistent progress
-                        update_touchpoint_progress(tp_type, sent=_send_all_progress[job_id]['sent'])
-                    else:
-                        # Only count as "failed" for actual send failures (network, auth, etc.)
-                        _send_all_progress[job_id]['failed'] += 1
-                        _send_all_progress[job_id]['results'].append({
-                            'id': contact.id, 'email': email_addr, 'ok': False,
-                        })
-                        # Update persistent progress
-                        update_touchpoint_progress(tp_type, failed=_send_all_progress[job_id]['failed'])
-            except Exception:
-                # Catch-all: never let one contact crash the entire send job
-                # Most exceptions here would be network/system issues, so count as failed
-                with _progress_lock:
-                    _send_all_progress[job_id]['failed'] += 1
-                    _send_all_progress[job_id]['results'].append({
-                        'id': contact.id, 'email': getattr(contact, 'email', '?'), 'ok': False,
-                    })
-
-        # Send with 2 concurrent threads + adaptive rate limiting
-        # (reduced from 5 to prevent Graph API throttling with ~7 MB payloads)
-        try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-                pool.map(_send_one, contacts)
-        except Exception:
-            pass
-        finally:
-            _send_all_progress[job_id]['done'] = True
-            _send_all_progress[job_id]['current'] = ''
-            # Mark touchpoint as completed
-            update_touchpoint_progress(tp_type, status="idle")
-
-    t = threading.Thread(target=_do_send, daemon=True)
-    t.start()
 
     return JsonResponse({'ok': True, 'job_id': job_id, 'total': len(contacts)})
 
@@ -2174,22 +1990,34 @@ def send_all_progress(request):
     """Poll progress of a send-all job."""
     job_id = request.GET.get('job_id', '')
     progress = _send_all_progress.get(job_id)
+
+    # Fallback: read from the subprocess job file (survives gunicorn restarts)
+    if not progress:
+        _job_file = os.path.join(os.path.dirname(__file__), '..', f'send_job_{job_id}.json')
+        if os.path.exists(_job_file):
+            try:
+                with open(_job_file) as _f:
+                    progress = json.load(_f)
+            except Exception:
+                pass
+
     if not progress:
         return JsonResponse({'ok': False, 'error': 'Job not found'}, status=404)
 
     # Return new results since last poll
     last_idx = int(request.GET.get('last_idx', 0))
-    new_results = progress['results'][last_idx:]
+    all_results = progress.get('results', [])
+    new_results = all_results[last_idx:]
 
     return JsonResponse({
         'ok': True,
         'total': progress['total'],
         'sent': progress['sent'],
-        'failed': progress['failed'],
-        'current': progress['current'],
-        'done': progress['done'],
+        'failed': progress.get('failed', 0),
+        'current': progress.get('current', ''),
+        'done': progress.get('done', False),
         'results': new_results,
-        'next_idx': len(progress['results']),
+        'next_idx': len(all_results),
     })
 
 
