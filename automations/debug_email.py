@@ -19,7 +19,7 @@ from dashboard.models import TouchpointTemplate, USEUContact
 import requests
 import json
 import base64
-import os as os_module
+import os
 
 def debug_email_with_attachment():
     print("🔍 Debug email with attachment payload")
@@ -66,7 +66,7 @@ def debug_email_with_attachment():
     if template.attachment:
         try:
             att_path = template.attachment.path
-            att_size = os_module.path.getsize(att_path)
+            att_size = os.path.getsize(att_path)
             print(f"   File size: {att_size:,} bytes ({att_size / 1024 / 1024:.2f} MB)")
             
             with open(att_path, 'rb') as f:
@@ -78,8 +78,8 @@ def debug_email_with_attachment():
             att_base64 = base64.b64encode(att_bytes).decode('utf-8')
             print(f"   Base64 encoded: {len(att_base64):,} characters")
             
-            raw_name = os_module.path.basename(att_path)
-            name_part, ext = os_module.splitext(raw_name)
+            raw_name = os.path.basename(att_path)
+            name_part, ext = os.path.splitext(raw_name)
             att_name = name_part.replace('_', ' ').replace('-', ' ')
             att_name = ' '.join(att_name.split()) + ext
             
