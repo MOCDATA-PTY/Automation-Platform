@@ -202,9 +202,14 @@ def run_test_campaign():
         print("🛑 Test cancelled")
         return
     
-    # Set test mode temporarily
-    import os
-    os.environ['TEST_EMAIL_OVERRIDE'] = 'ethansevenster5@gmail.com'
+    # Set test mode temporarily - modify Django settings directly
+    from django.conf import settings as django_settings
+    
+    # Store original value
+    original_override = getattr(django_settings, 'TEST_EMAIL_OVERRIDE', None)
+    
+    # Set the test override
+    django_settings.TEST_EMAIL_OVERRIDE = 'ethansevenster5@gmail.com'
     
     try:
         # Create mock request with authenticated user (same as real campaign)
@@ -212,6 +217,7 @@ def run_test_campaign():
         mock_request = MockRequest(request_data, user=user)
         
         print(f"📧 Starting TP{tp_num} test campaign...")
+        print(f"🔄 All emails will be redirected to: ethansevenster5@gmail.com")
         
         # Call the actual send function (same as real campaign)
         response = send_all_touchpoint(mock_request)
@@ -257,9 +263,12 @@ def run_test_campaign():
             print(f"❌ Test campaign failed: {result}")
     
     finally:
-        # Remove test override
-        if 'TEST_EMAIL_OVERRIDE' in os.environ:
-            del os.environ['TEST_EMAIL_OVERRIDE']
+        # Restore original setting
+        if original_override is None:
+            if hasattr(django_settings, 'TEST_EMAIL_OVERRIDE'):
+                delattr(django_settings, 'TEST_EMAIL_OVERRIDE')
+        else:
+            django_settings.TEST_EMAIL_OVERRIDE = original_override
 if __name__ == "__main__":
     print("📧 Touchpoint Email Campaign Runner")
     print("=" * 40)
