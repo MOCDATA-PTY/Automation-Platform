@@ -16,18 +16,30 @@ django.setup()
 
 from dashboard.models import USEUContact
 from dashboard.views import send_all_touchpoint, _send_all_progress
+from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
 import json
 import threading
 import time
 
 class MockRequest:
     """Mock Django request object for terminal use"""
-    def __init__(self, data):
+    def __init__(self, data, user=None):
         self.method = 'POST'
         self.body = json.dumps(data).encode('utf-8')
+        self.user = user
 
 def run_tp1_campaign():
     print("🚀 Starting TP1 Email Campaign from Terminal...")
+    
+    # Authenticate user
+    print("🔐 Authenticating...")
+    try:
+        user = User.objects.get(username='Ethan')
+        print("✅ User authenticated")
+    except User.DoesNotExist:
+        print("❌ User 'Ethan' not found")
+        return
     
     # Check eligible contacts first
     eligible = USEUContact.objects.filter(
@@ -47,9 +59,9 @@ def run_tp1_campaign():
             print("🛑 Campaign cancelled")
             return
     
-    # Create mock request
+    # Create mock request with authenticated user
     request_data = {'touchpoint_number': 1}
-    mock_request = MockRequest(request_data)
+    mock_request = MockRequest(request_data, user=user)
     
     print("📧 Starting email campaign...")
     
@@ -101,6 +113,15 @@ def run_tp1_campaign():
 def run_custom_campaign():
     print("🎯 Custom Email Campaign")
     
+    # Authenticate user
+    print("🔐 Authenticating...")
+    try:
+        user = User.objects.get(username='Ethan')
+        print("✅ User authenticated")
+    except User.DoesNotExist:
+        print("❌ User 'Ethan' not found")
+        return
+    
     while True:
         try:
             tp_num = int(input("Enter touchpoint number (1-10): "))
@@ -128,9 +149,9 @@ def run_custom_campaign():
             print("🛑 Campaign cancelled")
             return
     
-    # Create mock request
+    # Create mock request with authenticated user
     request_data = {'touchpoint_number': tp_num}
-    mock_request = MockRequest(request_data)
+    mock_request = MockRequest(request_data, user=user)
     
     print(f"📧 Starting TP{tp_num} campaign...")
     
