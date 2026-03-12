@@ -2070,7 +2070,7 @@ def send_all_touchpoint(request):
                         'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
                         'toRecipients': [{'emailAddress': {'address': email_addr}}],
                     },
-                    'saveToSentItems': 'true',
+                    'saveToSentItems': True,
                 }
                 att_list = []
                 if att_data:
@@ -2081,7 +2081,9 @@ def send_all_touchpoint(request):
                     payload['message']['attachments'] = att_list
 
                 # Send via _graph_send_mail which handles 429 retry + large attachments
+                print(f"[BULK DEBUG] Sending to: {email_addr}, From: {GRAPH_MAILBOX}, Subject: {subject}")
                 sent_ok, _status = _graph_send_mail(current_token, payload)
+                print(f"[BULK DEBUG] Result for {email_addr}: success={sent_ok}, status={_status}")
                 if sent_ok:
                     # Gradually speed up after success (min 1.5s for ~7 MB payloads)
                     _throttle[0] = max(_throttle[0] * 0.95, 1.5)
