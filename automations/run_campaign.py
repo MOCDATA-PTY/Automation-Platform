@@ -211,11 +211,12 @@ def run_test_campaign():
     print(f"📧 Using template data from: {test_contact.org_name}")
     
     # Import the sending logic
-    from dashboard.views import _get_graph_token, _graph_send_mail, GRAPH_MAILBOX
+    from dashboard.views import _get_graph_token, GRAPH_MAILBOX
     from dashboard.models import TouchpointTemplate
     import base64
     import os
     from django.conf import settings as django_settings
+    import requests
     
     # Get template
     try:
@@ -319,20 +320,39 @@ def run_test_campaign():
     if att_list:
         print(f"   📎 Attachments: {len(att_list)}")
     
-    # Send the email
-    sent_ok, status_code = _graph_send_mail(token, payload)
+    # Send the email using direct HTTP request (not _graph_send_mail which has complex logic)
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
     
-    if sent_ok:
-        print(f"✅ TEST EMAIL SENT SUCCESSFULLY! Status: {status_code}")
-        print("📬 Check ethansevenster5@gmail.com inbox (and spam folder)")
-        print("📤 Email should also appear in waldogaybba@moc-pty.com sent items")
-        return True
-    else:
-        print(f"❌ TEST EMAIL FAILED! Status: {status_code}")
-        if status_code == 403:
-            print("🔍 Permission denied - check shared mailbox permissions")
-        elif status_code == 401:
-            print("🔍 Authentication failed - token expired")
+    try:
+        r = requests.post(
+            f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
+            headers=headers,
+            json=payload,
+            timeout=60
+        )
+        
+        sent_ok = r.status_code == 202
+        status_code = r.status_code
+        
+        if sent_ok:
+            print(f"✅ TEST EMAIL SENT SUCCESSFULLY! Status: {status_code}")
+            print("📬 Check ethansevenster5@gmail.com inbox (and spam folder)")
+            print("📤 Email should also appear in waldogaybba@moc-pty.com sent items")
+            return True
+        else:
+            print(f"❌ TEST EMAIL FAILED! Status: {status_code}")
+            print(f"Response: {r.text}")
+            if status_code == 403:
+                print("🔍 Permission denied - check shared mailbox permissions")
+            elif status_code == 401:
+                print("🔍 Authentication failed - token expired")
+            return False
+    
+    except Exception as e:
+        print(f"❌ Request error: {e}")
         return False
 if __name__ == "__main__":
     print("📧 Touchpoint Email Campaign Runner")
