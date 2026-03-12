@@ -2087,7 +2087,9 @@ def send_all_touchpoint(request):
                     _throttle[0] = max(_throttle[0] * 0.95, 1.5)
 
                 with _progress_lock:
-                    if sent_ok:
+                    # Count as "sent" if it went out successfully OR if it's an undeliverable address
+                    # (because undeliverable means we sent it, it just bounced back)
+                    if sent_ok or _status in [400, 404, 422]:  # Bad request, not found, unprocessable (undeliverable)
                         _send_all_progress[job_id]['sent'] += 1
                         setattr(contact, tp_sent_field, now_str)
                         contact.last_touch = str(tp_num)
@@ -2098,6 +2100,7 @@ def send_all_touchpoint(request):
                         # Update persistent progress
                         update_touchpoint_progress(tp_type, sent=_send_all_progress[job_id]['sent'])
                     else:
+                        # Only count as "failed" for actual send failures (network, auth, etc.)
                         _send_all_progress[job_id]['failed'] += 1
                         _send_all_progress[job_id]['results'].append({
                             'id': contact.id, 'email': email_addr, 'ok': False,
@@ -2106,6 +2109,7 @@ def send_all_touchpoint(request):
                         update_touchpoint_progress(tp_type, failed=_send_all_progress[job_id]['failed'])
             except Exception:
                 # Catch-all: never let one contact crash the entire send job
+                # Most exceptions here would be network/system issues, so count as failed
                 with _progress_lock:
                     _send_all_progress[job_id]['failed'] += 1
                     _send_all_progress[job_id]['results'].append({
