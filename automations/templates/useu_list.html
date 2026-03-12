@@ -816,7 +816,6 @@
             }
             sendJobId = data.job_id;
             pollLastIdx = 0;
-            document.getElementById('progTotal').textContent = data.total;
             pollProgress();
         })
         .catch(err => {
@@ -836,18 +835,6 @@
         .then(r => r.json())
         .then(data => {
             if (!data.ok) return;
-
-            document.getElementById('progSent').textContent = data.sent;
-            document.getElementById('progFailed').textContent = data.failed;
-            const totalCount = parseInt(document.getElementById('progTotal').textContent) || 0;
-            if (data.current) {
-                document.getElementById('progCurrent').textContent = 'Sending ' + (data.sent + data.failed + 1) + ' of ' + totalCount + ' — ' + data.current;
-            } else {
-                document.getElementById('progCurrent').textContent = '';
-            }
-
-            const pct = data.total > 0 ? ((data.sent + data.failed) / data.total * 100) : 0;
-            document.getElementById('progBar').style.width = pct.toFixed(1) + '%';
 
             // Update rows in real-time
             data.results.forEach(res => {
