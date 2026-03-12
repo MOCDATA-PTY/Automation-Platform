@@ -2255,6 +2255,10 @@ def _graph_send_mail(token, payload, max_retries=5):
     Returns (success: bool, status_code: int).
     """
     import sys
+    
+    # Debug log to see if emails are being attempted
+    recipient = payload.get('message', {}).get('toRecipients', [{}])[0].get('emailAddress', {}).get('address', 'unknown')
+    print(f"[DEBUG] Attempting Graph API email send to: {recipient}")
 
     headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
 
