@@ -248,24 +248,25 @@ def run_test_campaign():
     # Add signature handling (same as bulk)
     import re
     sig_inline = None
-    if content_type == 'HTML':
-        final_body = re.sub(
-            r'https://drive\.google\.com/thumbnail\?id=[^"\'&]+(?:&amp;[^"\']*|&[^"\']*)*',
-            r'cid:signature_waldo',
-            final_body,
-            flags=re.IGNORECASE
-        )
-        sig_path = os.path.join(django_settings.BASE_DIR, 'static', 'signature_waldo.png')
-        if os.path.isfile(sig_path):
-            with open(sig_path, 'rb') as sf:
-                sig_inline = {
-                    '@odata.type': '#microsoft.graph.fileAttachment',
-                    'name': 'signature_waldo.png',
-                    'contentType': 'image/png',
-                    'contentBytes': base64.b64encode(sf.read()).decode('utf-8'),
-                    'contentId': 'signature_waldo',
-                    'isInline': True,
-                }
+    # Temporarily disable signature to test if that's causing 403
+    # if content_type == 'HTML':
+    #     final_body = re.sub(
+    #         r'https://drive\.google\.com/thumbnail\?id=[^"\'&]+(?:&amp;[^"\']*|&[^"\']*)*',
+    #         r'cid:signature_waldo',
+    #         final_body,
+    #         flags=re.IGNORECASE
+    #     )
+    #     sig_path = os.path.join(django_settings.BASE_DIR, 'static', 'signature_waldo.png')
+    #     if os.path.isfile(sig_path):
+    #         with open(sig_path, 'rb') as sf:
+    #             sig_inline = {
+    #                 '@odata.type': '#microsoft.graph.fileAttachment',
+    #                 'name': 'signature_waldo.png',
+    #                 'contentType': 'image/png',
+    #                 'contentBytes': base64.b64encode(sf.read()).decode('utf-8'),
+    #                 'contentId': 'signature_waldo',
+    #                 'isInline': True,
+    #             }
     
     # Add template attachment (same as bulk)
     att_data = None
