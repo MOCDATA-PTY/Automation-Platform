@@ -174,7 +174,7 @@ def run_custom_campaign():
         print(f"❌ Campaign failed: {result}")
 
 def run_test_campaign():
-    print("🧪 Test Campaign to ethansevenster5@gmail.com (same as full campaign)")
+    print("🧪 Send ONE test email to ethansevenster5@gmail.com")
     
     # Authenticate user
     print("🔐 Authenticating...")
@@ -195,86 +195,150 @@ def run_test_campaign():
         except ValueError:
             print("Please enter a valid number")
     
-    print(f"🧪 This will run the full TP{tp_num} campaign but send only to ethansevenster5@gmail.com")
-    print("   (Same logic, templates, attachments as real campaign)")
+    print(f"🧪 This will send ONE TP{tp_num} email to ethansevenster5@gmail.com")
+    print("   (Same template and attachments as real campaign)")
     response = input("Continue? (y/N): ")
     if response.lower() != 'y':
         print("🛑 Test cancelled")
         return
     
-    # Set test mode temporarily - modify Django settings directly
+    # Get a real contact for template data
+    test_contact = USEUContact.objects.filter(status='Active').exclude(email='').first()
+    if not test_contact:
+        print("❌ No active contacts found for template data")
+        return
+    
+    print(f"📧 Using template data from: {test_contact.org_name}")
+    
+    # Import the sending logic
+    from dashboard.views import _get_graph_token, _graph_send_mail, GRAPH_MAILBOX
+    from dashboard.models import TouchpointTemplate
+    import base64
+    import os
     from django.conf import settings as django_settings
     
-    # Store original value
-    original_override = getattr(django_settings, 'TEST_EMAIL_OVERRIDE', None)
-    
-    # Set the test override
-    django_settings.TEST_EMAIL_OVERRIDE = 'ethansevenster5@gmail.com'
-    
+    # Get template
     try:
-        # Create mock request with authenticated user (same as real campaign)
-        request_data = {'touchpoint_number': tp_num}
-        mock_request = MockRequest(request_data, user=user)
-        
-        print(f"📧 Starting TP{tp_num} test campaign...")
-        print(f"🔄 All emails will be redirected to: ethansevenster5@gmail.com")
-        
-        # Call the actual send function (same as real campaign)
-        response = send_all_touchpoint(mock_request)
-        
-        if hasattr(response, 'content'):
-            result = json.loads(response.content.decode())
-        else:
-            result = response
-        
-        if isinstance(result, dict) and result.get('ok'):
-            job_id = result.get('job_id')
-            total = result.get('total')
-            print(f"✅ Test campaign started successfully!")
-            print(f"📊 Job ID: {job_id}")
-            print(f"📊 Emails redirected to: ethansevenster5@gmail.com")
-            print("🔍 Debug logs will show the actual sending process")
-            
-            # Monitor progress briefly
-            print("\n📈 Monitoring progress...")
-            for i in range(10):  # Check for 20 seconds
-                if job_id in _send_all_progress:
-                    progress = _send_all_progress[job_id]
-                    sent = progress.get('sent', 0)
-                    failed = progress.get('failed', 0)
-                    current = progress.get('current', '')
-                    done = progress.get('done', False)
-                    
-                    print(f"\r📊 Progress: {sent} sent, {failed} failed", end="")
-                    if current:
-                        print(f" | Redirected to: ethansevenster5@gmail.com", end="")
-                    
-                    if done:
-                        print(f"\n✅ Test campaign completed!")
-                        print(f"📊 Final: {sent} emails sent to ethansevenster5@gmail.com")
-                        break
-                
-                time.sleep(2)
-            
-            if not done:
-                print(f"\n📊 Test campaign is running in background...")
-            
-        else:
-            print(f"❌ Test campaign failed: {result}")
+        template = TouchpointTemplate.objects.get(touchpoint_number=tp_num)
+        print(f"✅ Got TP{tp_num} template: {template.subject}")
+    except TouchpointTemplate.DoesNotExist:
+        print(f"❌ TP{tp_num} template not found")
+        return
     
-    finally:
-        # Restore original setting
-        if original_override is None:
-            if hasattr(django_settings, 'TEST_EMAIL_OVERRIDE'):
-                delattr(django_settings, 'TEST_EMAIL_OVERRIDE')
-        else:
-            django_settings.TEST_EMAIL_OVERRIDE = original_override
+    # Get Graph token
+    print("📡 Getting Graph API token...")
+    token = _get_graph_token()
+    if not token:
+        print("❌ Failed to get Graph API token")
+        return
+    print("✅ Got Graph API token")
+    
+    # Build email with same logic as bulk campaign
+    body_content = template.body_html if template.body_html else template.body
+    content_type = 'HTML' if template.body_html else 'Text'
+    
+    # Variable substitution
+    final_body = body_content
+    final_body = final_body.replace('{{org_name}}', test_contact.org_name or '')
+    final_body = final_body.replace('{{contact_name}}', test_contact.contact_name or '')
+    final_body = final_body.replace('{{email}}', 'ethansevenster5@gmail.com')
+    final_body = final_body.replace('{{phone}}', test_contact.phone or '')
+    final_body = final_body.replace('{{touchpoint_number}}', str(tp_num))
+    
+    # Add signature handling (same as bulk)
+    import re
+    sig_inline = None
+    if content_type == 'HTML':
+        final_body = re.sub(
+            r'https://drive\.google\.com/thumbnail\?id=[^"\'&]+(?:&amp;[^"\']*|&[^"\']*)*',
+            r'cid:signature_waldo',
+            final_body,
+            flags=re.IGNORECASE
+        )
+        sig_path = os.path.join(django_settings.BASE_DIR, 'static', 'signature_waldo.png')
+        if os.path.isfile(sig_path):
+            with open(sig_path, 'rb') as sf:
+                sig_inline = {
+                    '@odata.type': '#microsoft.graph.fileAttachment',
+                    'name': 'signature_waldo.png',
+                    'contentType': 'image/png',
+                    'contentBytes': base64.b64encode(sf.read()).decode('utf-8'),
+                    'contentId': 'signature_waldo',
+                    'isInline': True,
+                }
+    
+    # Add template attachment (same as bulk)
+    att_data = None
+    if template.attachment:
+        try:
+            att_path = template.attachment.path
+            with open(att_path, 'rb') as f:
+                att_bytes = f.read()
+            raw_name = os.path.basename(att_path)
+            name_part, ext = os.path.splitext(raw_name)
+            att_name = name_part.replace('_', ' ').replace('-', ' ')
+            att_name = ' '.join(att_name.split()) + ext
+            att_data = {
+                '@odata.type': '#microsoft.graph.fileAttachment',
+                'name': att_name,
+                'contentBytes': base64.b64encode(att_bytes).decode('utf-8'),
+            }
+            print(f"📎 Attachment: {att_name}")
+        except Exception as e:
+            print(f"⚠️  Attachment error: {e}")
+    
+    subject = template.subject or f'TP{tp_num}'
+    subject = subject.replace('{{org_name}}', test_contact.org_name or '')
+    subject = subject.replace('{{contact_name}}', test_contact.contact_name or '')
+    
+    # Build payload (same structure as bulk)
+    payload = {
+        'message': {
+            'subject': subject,
+            'body': {'contentType': content_type, 'content': final_body},
+            'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
+            'toRecipients': [{'emailAddress': {'address': 'ethansevenster5@gmail.com'}}],
+        },
+        'saveToSentItems': True,
+    }
+    
+    # Add attachments
+    att_list = []
+    if att_data:
+        att_list.append(att_data)
+    if sig_inline:
+        att_list.append(sig_inline)
+    if att_list:
+        payload['message']['attachments'] = att_list
+    
+    print(f"📧 Sending test email...")
+    print(f"   📤 From: {GRAPH_MAILBOX}")
+    print(f"   📬 To: ethansevenster5@gmail.com")
+    print(f"   📝 Subject: {subject}")
+    if att_list:
+        print(f"   📎 Attachments: {len(att_list)}")
+    
+    # Send the email
+    sent_ok, status_code = _graph_send_mail(token, payload)
+    
+    if sent_ok:
+        print(f"✅ TEST EMAIL SENT SUCCESSFULLY! Status: {status_code}")
+        print("📬 Check ethansevenster5@gmail.com inbox (and spam folder)")
+        print("📤 Email should also appear in waldogaybba@moc-pty.com sent items")
+        return True
+    else:
+        print(f"❌ TEST EMAIL FAILED! Status: {status_code}")
+        if status_code == 403:
+            print("🔍 Permission denied - check shared mailbox permissions")
+        elif status_code == 401:
+            print("🔍 Authentication failed - token expired")
+        return False
 if __name__ == "__main__":
     print("📧 Touchpoint Email Campaign Runner")
     print("=" * 40)
     print("1. Run TP1 Campaign (Full)")
     print("2. Custom Touchpoint Campaign")
-    print("3. Test Campaign to ethansevenster5@gmail.com (full campaign logic)")
+    print("3. Send ONE test email to ethansevenster5@gmail.com")
     print("4. Exit")
     
     while True:
