@@ -174,7 +174,7 @@ def run_custom_campaign():
         print(f"❌ Campaign failed: {result}")
 
 def run_test_campaign():
-    print("🧪 Test Email Campaign (sends to ethansevenster5@gmail.com)")
+    print("🧪 Test Campaign to ethansevenster5@gmail.com (same as full campaign)")
     
     # Authenticate user
     print("🔐 Authenticating...")
@@ -195,98 +195,77 @@ def run_test_campaign():
         except ValueError:
             print("Please enter a valid number")
     
-    print(f"🧪 This will send 1 test TP{tp_num} email to ethansevenster5@gmail.com")
+    print(f"🧪 This will run the full TP{tp_num} campaign but send only to ethansevenster5@gmail.com")
+    print("   (Same logic, templates, attachments as real campaign)")
     response = input("Continue? (y/N): ")
     if response.lower() != 'y':
         print("🛑 Test cancelled")
         return
     
-    # Get any contact for template data
-    test_contact = USEUContact.objects.filter(status='Active').first()
-    if not test_contact:
-        print("❌ No contacts found for template data")
-        return
+    # Set test mode temporarily
+    import os
+    os.environ['TEST_EMAIL_OVERRIDE'] = 'ethansevenster5@gmail.com'
     
-    print(f"📧 Using contact data from: {test_contact.org_name} for template")
-    
-    # Import the direct sending logic
-    from dashboard.views import _get_graph_token, _graph_send_mail, GRAPH_MAILBOX
-    from dashboard.models import TouchpointTemplate
-    import datetime
-    
-    # Get template
     try:
-        template = TouchpointTemplate.objects.get(touchpoint_number=tp_num)
-        print(f"✅ Got TP{tp_num} template: {template.subject}")
-    except TouchpointTemplate.DoesNotExist:
-        print(f"❌ TP{tp_num} template not found")
-        return
+        # Create mock request with authenticated user (same as real campaign)
+        request_data = {'touchpoint_number': tp_num}
+        mock_request = MockRequest(request_data, user=user)
+        
+        print(f"📧 Starting TP{tp_num} test campaign...")
+        
+        # Call the actual send function (same as real campaign)
+        response = send_all_touchpoint(mock_request)
+        
+        if hasattr(response, 'content'):
+            result = json.loads(response.content.decode())
+        else:
+            result = response
+        
+        if isinstance(result, dict) and result.get('ok'):
+            job_id = result.get('job_id')
+            total = result.get('total')
+            print(f"✅ Test campaign started successfully!")
+            print(f"📊 Job ID: {job_id}")
+            print(f"📊 Emails redirected to: ethansevenster5@gmail.com")
+            print("🔍 Debug logs will show the actual sending process")
+            
+            # Monitor progress briefly
+            print("\n📈 Monitoring progress...")
+            for i in range(10):  # Check for 20 seconds
+                if job_id in _send_all_progress:
+                    progress = _send_all_progress[job_id]
+                    sent = progress.get('sent', 0)
+                    failed = progress.get('failed', 0)
+                    current = progress.get('current', '')
+                    done = progress.get('done', False)
+                    
+                    print(f"\r📊 Progress: {sent} sent, {failed} failed", end="")
+                    if current:
+                        print(f" | Redirected to: ethansevenster5@gmail.com", end="")
+                    
+                    if done:
+                        print(f"\n✅ Test campaign completed!")
+                        print(f"📊 Final: {sent} emails sent to ethansevenster5@gmail.com")
+                        break
+                
+                time.sleep(2)
+            
+            if not done:
+                print(f"\n📊 Test campaign is running in background...")
+            
+        else:
+            print(f"❌ Test campaign failed: {result}")
     
-    # Get Graph token
-    print("📡 Getting Graph API token...")
-    token = _get_graph_token()
-    if not token:
-        print("❌ Failed to get Graph API token")
-        return
-    print("✅ Got Graph API token")
-    
-    # Build test email
-    body_content = template.body_html if template.body_html else template.body
-    content_type = 'HTML' if template.body_html else 'Text'
-    
-    # Variable substitution using test contact data
-    final_body = body_content
-    final_body = final_body.replace('{{org_name}}', test_contact.org_name or 'TEST COMPANY')
-    final_body = final_body.replace('{{contact_name}}', test_contact.contact_name or 'TEST CONTACT')
-    final_body = final_body.replace('{{email}}', 'ethansevenster5@gmail.com')
-    final_body = final_body.replace('{{phone}}', test_contact.phone or 'TEST PHONE')
-    final_body = final_body.replace('{{touchpoint_number}}', str(tp_num))
-    
-    # Add test notice to email
-    if content_type == 'HTML':
-        test_notice = '<div style="background:#ffeb3b;padding:10px;margin-bottom:20px;border:2px solid #f57f17;"><strong>🧪 TEST EMAIL</strong> - This is a test of TP' + str(tp_num) + ' sent from the terminal campaign runner.</div>'
-        final_body = test_notice + final_body
-    else:
-        final_body = f"🧪 TEST EMAIL - This is a test of TP{tp_num} sent from the terminal campaign runner.\n\n" + final_body
-    
-    subject = template.subject or f'TP{tp_num} Test'
-    subject = subject.replace('{{org_name}}', test_contact.org_name or 'TEST COMPANY')
-    subject = subject.replace('{{contact_name}}', test_contact.contact_name or 'TEST CONTACT')
-    subject = f"🧪 TEST - {subject}"
-    
-    # Build payload
-    payload = {
-        'message': {
-            'subject': subject,
-            'body': {'contentType': content_type, 'content': final_body},
-            'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
-            'toRecipients': [{'emailAddress': {'address': 'ethansevenster5@gmail.com', 'name': 'Ethan Test'}}],
-        },
-        'saveToSentItems': True,
-    }
-    
-    print(f"📧 Sending test email...")
-    print(f"   📤 From: {GRAPH_MAILBOX}")
-    print(f"   📬 To: ethansevenster5@gmail.com")
-    print(f"   📝 Subject: {subject}")
-    
-    # Send the email
-    sent_ok, status_code = _graph_send_mail(token, payload)
-    
-    if sent_ok:
-        print(f"✅ TEST EMAIL SENT SUCCESSFULLY! Status: {status_code}")
-        print("📬 Check ethansevenster5@gmail.com inbox (and spam folder)")
-        print("📤 Email should also appear in waldogaybba@moc-pty.com sent items")
-        return True
-    else:
-        print(f"❌ TEST EMAIL FAILED! Status: {status_code}")
-        return False
+    finally:
+        # Remove test override
+        if 'TEST_EMAIL_OVERRIDE' in os.environ:
+            del os.environ['TEST_EMAIL_OVERRIDE']
 if __name__ == "__main__":
     print("📧 Touchpoint Email Campaign Runner")
     print("=" * 40)
     print("1. Run TP1 Campaign (Full)")
     print("2. Custom Touchpoint Campaign")
-    print("3. Test Email to ethansevenster5@gmail.com")
+    print("3. Test Campaign to ethansevenster5@gmail.com (full campaign logic)")
     print("4. Exit")
     
     while True:
