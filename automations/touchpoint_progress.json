@@ -1,12 +1,12 @@
 {
     "tp1": {
-        "total_contacts": 0,
-        "sent_count": 0,
+        "total_contacts": 47579,
+        "sent_count": 155,
         "failed_count": 0,
-        "current_email": "",
-        "started_at": null,
-        "last_updated": null,
-        "status": "idle"
+        "current_email": "test@example.com",
+        "started_at": "2026-03-12T10:20:00",
+        "last_updated": "2026-03-12T10:25:00",
+        "status": "sending"
     },
     "tp2": {
         "total_contacts": 0,
