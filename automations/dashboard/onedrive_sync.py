@@ -189,7 +189,11 @@ def list_files_in_folder(folder_path='/'):
     return files
 
 def download_file(file_id):
-    """Download file from OneDrive by file ID"""
+    """Download file from OneDrive by file ID.
+
+    Retries up to 5 times on HTTP 429 (throttled) or 503 (service unavailable),
+    respecting the Retry-After header from Microsoft Graph API.
+    """
     token = get_access_token()
     if not token:
         return None
@@ -197,9 +201,34 @@ def download_file(file_id):
     headers = {'Authorization': f'Bearer {token}'}
     url = f'{GRAPH_API_ENDPOINT}/me/drive/items/{file_id}/content'
 
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return io.BytesIO(response.content)
+    for attempt in range(5):
+        try:
+            response = requests.get(url, headers=headers, timeout=120)
+            if response.status_code == 200:
+                return io.BytesIO(response.content)
+            elif response.status_code in (429, 503):
+                retry_after = int(response.headers.get('Retry-After', 10))
+                wait = retry_after + attempt * 5
+                logger.warning(f"Download throttled (HTTP {response.status_code}) for file {file_id}, "
+                               f"waiting {wait}s (attempt {attempt+1}/5)")
+                time.sleep(wait)
+            elif response.status_code == 401:
+                # Token may have expired, get a fresh one
+                token = get_access_token()
+                if token:
+                    headers['Authorization'] = f'Bearer {token}'
+                    time.sleep(1)
+                else:
+                    logger.error("Token refresh failed during download")
+                    return None
+            else:
+                logger.error(f"Download failed for file {file_id}: HTTP {response.status_code}")
+                return None
+        except requests.RequestException as e:
+            logger.warning(f"Download request error for file {file_id}: {e} (attempt {attempt+1}/5)")
+            time.sleep(5 * (attempt + 1))
+
+    logger.error(f"All 5 download attempts failed for file {file_id}")
     return None
 
 def delete_file(file_id):

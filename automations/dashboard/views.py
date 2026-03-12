@@ -2022,7 +2022,8 @@ def send_all_touchpoint(request):
         now_str = datetime.now().strftime('%d/%m/%Y')
         _progress_lock = threading.Lock()
         # Adaptive throttle: all threads share this delay (seconds between sends)
-        _throttle = [1.0]  # start at 1 send/sec per thread → 5 threads ≈ 5/sec
+        # With ~7 MB per email, start conservatively to avoid Graph 429 throttling
+        _throttle = [3.0]  # start at 3s per thread → 2 threads ≈ 1 send every 1.5s
 
         def _send_one(contact):
             try:
@@ -2072,35 +2073,11 @@ def send_all_touchpoint(request):
                 if att_list:
                     payload['message']['attachments'] = att_list
 
-                # Retry with exponential backoff on throttling (429)
-                sent_ok = False
-                for attempt in range(5):
-                    try:
-                        r = http_requests.post(
-                            f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
-                            headers=headers, json=payload, timeout=30
-                        )
-                        if r.status_code == 202:
-                            sent_ok = True
-                            # Gradually speed up after success (min 0.3s)
-                            _throttle[0] = max(_throttle[0] * 0.95, 0.3)
-                            break
-                        elif r.status_code == 429:
-                            retry_after = int(r.headers.get('Retry-After', 10))
-                            # Slow ALL threads down when throttled
-                            _throttle[0] = min(_throttle[0] * 2, 15.0)
-                            time.sleep(retry_after + attempt * 5)
-                        elif r.status_code == 401:
-                            # Token expired mid-run — force refresh
-                            with token_lock:
-                                token_data['obtained'] = 0
-                            current_token = _fresh_token()
-                            headers['Authorization'] = f'Bearer {current_token}'
-                            time.sleep(1)
-                        else:
-                            break  # Other error, give up
-                    except Exception:
-                        time.sleep(2)
+                # Send via _graph_send_mail which handles 429 retry + large attachments
+                sent_ok, _status = _graph_send_mail(current_token, payload)
+                if sent_ok:
+                    # Gradually speed up after success (min 1.5s for ~7 MB payloads)
+                    _throttle[0] = max(_throttle[0] * 0.95, 1.5)
 
                 with _progress_lock:
                     if sent_ok:
@@ -2124,9 +2101,10 @@ def send_all_touchpoint(request):
                         'id': contact.id, 'email': getattr(contact, 'email', '?'), 'ok': False,
                     })
 
-        # Send with 5 concurrent threads + adaptive rate limiting
+        # Send with 2 concurrent threads + adaptive rate limiting
+        # (reduced from 5 to prevent Graph API throttling with ~7 MB payloads)
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
                 pool.map(_send_one, contacts)
         except Exception:
             pass
@@ -2248,6 +2226,161 @@ def _get_graph_token():
     )
     result = app.acquire_token_for_client(scopes=['https://graph.microsoft.com/.default'])
     return result.get('access_token')
+
+
+def _graph_send_mail(token, payload, max_retries=5):
+    """Send an email via Graph API with 429 throttle retry and large-attachment support.
+
+    If the JSON payload exceeds ~3.5 MB (Graph /sendMail limit is 4 MB for the
+    whole JSON body), it automatically switches to the draft-then-upload flow
+    so attachments up to 150 MB work.
+
+    Returns (success: bool, status_code: int).
+    """
+    import sys
+
+    headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+
+    # ── Estimate payload size (base64 attachments dominate) ──────────────
+    attachments = payload.get('message', {}).get('attachments', [])
+    att_bytes_total = sum(len(a.get('contentBytes', '')) for a in attachments)
+    # contentBytes is already a base64 string; measure it directly as float
+    estimated_json_mb = float(att_bytes_total) / (1024.0 * 1024.0)
+
+    use_upload_session = estimated_json_mb > 3.0  # stay safely under 4 MB limit
+
+    if not use_upload_session:
+        # ── Normal /sendMail (small messages) ──────────────────────────
+        for attempt in range(max_retries):
+            try:
+                r = http_requests.post(
+                    f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
+                    headers=headers, json=payload, timeout=60,
+                )
+                if r.status_code == 202:
+                    return True, 202
+                if r.status_code == 429:
+                    retry_after = int(r.headers.get('Retry-After', 10))
+                    time.sleep(retry_after + attempt * 5)
+                elif r.status_code == 413:
+                    # Payload too large — fall back to upload session
+                    use_upload_session = True
+                    break
+                elif r.status_code == 401:
+                    token = _get_graph_token()
+                    if token:
+                        headers['Authorization'] = f'Bearer {token}'
+                    time.sleep(1)
+                else:
+                    return False, r.status_code
+            except Exception:
+                time.sleep(3 * (attempt + 1))
+        if not use_upload_session:
+            return False, 0
+
+    # ── Large-message flow: create draft → upload attachments → send ───
+    try:
+        # 1. Create a draft message (without attachments)
+        draft_payload = json.loads(json.dumps(payload))  # deep copy
+        draft_msg = draft_payload.get('message', {})
+        large_atts = draft_msg.pop('attachments', [])
+        save_to_sent = draft_payload.get('saveToSentItems', True)
+
+        for attempt in range(max_retries):
+            r = http_requests.post(
+                f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/messages',
+                headers=headers, json=draft_msg, timeout=60,
+            )
+            if r.status_code in (200, 201):
+                break
+            if r.status_code == 429:
+                time.sleep(int(r.headers.get('Retry-After', 10)) + attempt * 5)
+            else:
+                return False, r.status_code
+        else:
+            return False, 0
+
+        draft_id = r.json().get('id')
+        if not draft_id:
+            return False, 0
+
+        # 2. Upload each attachment (inline or regular)
+        for att in large_atts:
+            att_name = att.get('name', 'attachment')
+            att_content_bytes = base64.b64decode(att.get('contentBytes', ''))
+            att_size = len(att_content_bytes)
+            is_inline = att.get('isInline', False)
+            content_id = att.get('contentId', '')
+
+            if att_size < 3 * 1024 * 1024:
+                # Small attachment — add directly to draft
+                add_url = f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/messages/{draft_id}/attachments'
+                for attempt in range(max_retries):
+                    r = http_requests.post(add_url, headers=headers, json=att, timeout=60)
+                    if r.status_code in (200, 201):
+                        break
+                    if r.status_code == 429:
+                        time.sleep(int(r.headers.get('Retry-After', 10)) + attempt * 5)
+                    else:
+                        break
+            else:
+                # Large attachment — use upload session
+                session_payload = {
+                    'AttachmentItem': {
+                        'attachmentType': 'file',
+                        'name': att_name,
+                        'size': att_size,
+                        'isInline': is_inline,
+                    }
+                }
+                if content_id:
+                    session_payload['AttachmentItem']['contentId'] = content_id
+
+                sess_url = (f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}'
+                            f'/messages/{draft_id}/attachments/createUploadSession')
+                r = http_requests.post(sess_url, headers=headers, json=session_payload, timeout=60)
+                if r.status_code not in (200, 201):
+                    continue  # skip this attachment
+
+                upload_url = r.json().get('uploadUrl')
+                if not upload_url:
+                    continue
+
+                # Upload in 3 MB chunks
+                chunk_size = 3 * 1024 * 1024
+                for offset in range(0, att_size, chunk_size):
+                    end = min(offset + chunk_size, att_size)
+                    chunk = att_content_bytes[offset:end]
+                    chunk_headers = {
+                        'Content-Type': 'application/octet-stream',
+                        'Content-Length': str(len(chunk)),
+                        'Content-Range': f'bytes {offset}-{end - 1}/{att_size}',
+                    }
+                    for attempt in range(max_retries):
+                        cr = http_requests.put(upload_url, headers=chunk_headers, data=chunk, timeout=120)
+                        if cr.status_code in (200, 201, 202):
+                            break
+                        if cr.status_code == 429:
+                            time.sleep(int(cr.headers.get('Retry-After', 10)))
+                        else:
+                            break
+
+        # 3. Send the draft
+        send_url = f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/messages/{draft_id}/send'
+        for attempt in range(max_retries):
+            r = http_requests.post(send_url, headers=headers, timeout=60)
+            if r.status_code == 202:
+                return True, 202
+            if r.status_code == 429:
+                time.sleep(int(r.headers.get('Retry-After', 10)) + attempt * 5)
+            else:
+                return False, r.status_code
+
+        return False, 0
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error(f'Large-message send failed: {exc}')
+        return False, 0
 
 
 @login_required
@@ -2378,14 +2511,12 @@ def send_touchpoint(request):
         if attachments:
             payload['message']['attachments'] = attachments
 
-        r = http_requests.post(
-            f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
-            headers=headers,
-            json=payload,
-        )
+        sent_ok, status_code = _graph_send_mail(token, payload)
+        results.append({'email': email_addr, 'ok': sent_ok, 'status': status_code})
 
-        sent_ok = r.status_code == 202
-        results.append({'email': email_addr, 'ok': sent_ok, 'status': r.status_code})
+        # Pace sends to avoid Graph API throttling (~7 MB per email)
+        if sent_ok:
+            time.sleep(2)
 
         # Update contact record if sent successfully
         if sent_ok and contact:
