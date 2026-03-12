@@ -299,7 +299,7 @@ def run_test_campaign():
             'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
             'toRecipients': [{'emailAddress': {'address': 'ethansevenster5@gmail.com'}}],
         },
-        'saveToSentItems': True,
+        'saveToSentItems': False,  # Try without saving first
     }
     
     # Add attachments
