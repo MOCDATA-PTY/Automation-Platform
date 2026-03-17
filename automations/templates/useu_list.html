@@ -840,22 +840,11 @@
                 <input type="text" id="modalPhone">
             </div>
             <div class="modal-field">
-                <label>TP1 Date (auto-calculates TP2-TP10)</label>
+                <label>TP1 Date</label>
                 <input type="text" id="modalTp1Date" class="tp-datepicker-modal" placeholder="Select date...">
             </div>
-            <div class="modal-field">
-                <label>Status</label>
-                <select id="modalStatus">
-                    <option value="Active">Active</option>
-                    <option value="Undeliverable">Undeliverable</option>
-                    <option value="Lost">Lost</option>
-                    <option value="Move to HubSpot">Move to HubSpot</option>
-                </select>
-            </div>
-            <div class="modal-field">
-                <label>Deal Lost Reason</label>
-                <input type="text" id="modalDealLostReason">
-            </div>
+            <input type="hidden" id="modalStatus" value="Active">
+            <input type="hidden" id="modalDealLostReason" value="">
         </div>
         <div class="modal-footer">
             <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Cancel</button>
