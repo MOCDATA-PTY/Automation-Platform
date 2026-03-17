@@ -1924,6 +1924,7 @@ def useu_list(request):
         'touchpoint_8', 'tp8_sent_on',
         'touchpoint_9', 'tp9_sent_on',
         'touchpoint_10', 'tp10_sent_on',
+        'deal_lost_reason',
     ))
 
     # AJAX requests get JSON
@@ -1968,6 +1969,7 @@ def useu_update_cell(request):
         'touchpoint_5', 'tp5_sent_on', 'touchpoint_6', 'tp6_sent_on',
         'touchpoint_7', 'tp7_sent_on', 'touchpoint_8', 'tp8_sent_on',
         'touchpoint_9', 'tp9_sent_on', 'touchpoint_10', 'tp10_sent_on',
+        'deal_lost_reason',
     ]
     if field not in allowed_fields:
         return JsonResponse({'ok': False, 'error': 'Field not editable'}, status=400)

@@ -69,8 +69,9 @@ def create_user_profile(sender, instance, created, **kwargs):
 class USEUContact(models.Model):
     STATUS_CHOICES = [
         ('Active', 'Active'),
-        ('Inactive', 'Inactive'),
-        ('Faulty Data', 'Faulty Data'),
+        ('Undeliverable', 'Undeliverable'),
+        ('Lost', 'Lost'),
+        ('Move to HubSpot', 'Move to HubSpot'),
     ]
 
     title = models.CharField(max_length=255, blank=True, default='')
@@ -111,6 +112,7 @@ class USEUContact(models.Model):
     tp9_sent_on = models.CharField(max_length=50, blank=True, default='')
     tp10_sent_on = models.CharField(max_length=50, blank=True, default='')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Active')
+    deal_lost_reason = models.CharField(max_length=500, blank=True, default='')
     tp1_processing_id = models.CharField(max_length=255, blank=True, default='')
 
     class Meta:
