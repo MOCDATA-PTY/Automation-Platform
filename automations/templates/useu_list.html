@@ -565,6 +565,18 @@
     color: var(--text-primary, #1b1a19);
 }
 
+/* Flatpickr disabled days */
+.flatpickr-day.flatpickr-disabled {
+    color: #ccc !important;
+    background: #f5f5f5 !important;
+    text-decoration: line-through;
+    cursor: not-allowed !important;
+}
+.flatpickr-day.flatpickr-disabled:hover {
+    background: #f5f5f5 !important;
+    border-color: transparent !important;
+}
+
 /* Context menu */
 .ctx-menu {
     display: none;
@@ -673,7 +685,7 @@
             <div class="tp-schedule-item">
                 <label>Touchpoint {{ tp_num }}</label>
                 <div style="display:flex;gap:6px;align-items:center;">
-                    <input type="date" id="schedDate{{ tp_num }}" onchange="setSchedule({{ tp_num }}, this.value)" style="flex:1;">
+                    <input type="text" class="tp-datepicker" id="schedDate{{ tp_num }}" data-tp="{{ tp_num }}" placeholder="Select date..." style="flex:1;">
                     <button class="sched-clear-btn" onclick="clearSchedule({{ tp_num }})" title="Clear">&times;</button>
                 </div>
                 <span class="schedule-status pending" id="schedStatus{{ tp_num }}"></span>
@@ -682,7 +694,7 @@
             <div class="tp-schedule-item">
                 <label>Touchpoint 10</label>
                 <div style="display:flex;gap:6px;align-items:center;">
-                    <input type="date" id="schedDate10" onchange="setSchedule(10, this.value)" style="flex:1;">
+                    <input type="text" class="tp-datepicker" id="schedDate10" data-tp="10" placeholder="Select date..." style="flex:1;">
                     <button class="sched-clear-btn" onclick="clearSchedule(10)" title="Clear">&times;</button>
                 </div>
                 <span class="schedule-status pending" id="schedStatus10"></span>
@@ -784,8 +796,7 @@
             </div>
             <div class="modal-field">
                 <label>TP1 Date (auto-calculates TP2-TP10)</label>
-                <input type="date" id="modalTp1Date" onchange="validateSendDate(this)">
-                <span id="modalTp1Warn" style="font-size:11px;color:#c0392b;display:none;"></span>
+                <input type="text" id="modalTp1Date" class="tp-datepicker-modal" placeholder="Select date...">
             </div>
             <div class="modal-field">
                 <label>Status</label>
@@ -1340,18 +1351,6 @@
         return false;
     }
 
-    window.validateSendDate = function(input) {
-        const warn = document.getElementById('modalTp1Warn');
-        const reason = isBlockedDate(input.value);
-        if (reason) {
-            warn.textContent = reason + ' — emails only go out Tue/Wed/Thu, non-holidays';
-            warn.style.display = 'block';
-            input.value = '';
-        } else {
-            warn.style.display = 'none';
-        }
-    };
-
     // ── Context Menu ───────────────────────────────────────────
     const ctxMenu = document.getElementById('ctxMenu');
     let ctxContactId = null;
@@ -1385,7 +1384,7 @@
         document.getElementById('modalContactName').value = '';
         document.getElementById('modalEmail').value = '';
         document.getElementById('modalPhone').value = '';
-        document.getElementById('modalTp1Date').value = '';
+        if (modalTp1Fp) modalTp1Fp.clear();
         document.getElementById('modalStatus').value = 'Active';
         document.getElementById('modalDealLostReason').value = '';
         document.getElementById('contactModal').classList.add('open');
@@ -1400,13 +1399,13 @@
         document.getElementById('modalContactName').value = row[2] || '';
         document.getElementById('modalEmail').value = row[3] || '';
         document.getElementById('modalPhone').value = row[4] || '';
-        // Convert TP1 date DD-MM-YYYY to YYYY-MM-DD for date input
+        // Set TP1 date via flatpickr
         const tp1 = (row[7] || '').trim();
-        if (tp1 && tp1.match(/^\d{2}-\d{2}-\d{4}$/)) {
+        if (tp1 && tp1.match(/^\d{2}-\d{2}-\d{4}$/) && modalTp1Fp) {
             const p = tp1.split('-');
-            document.getElementById('modalTp1Date').value = p[2] + '-' + p[1] + '-' + p[0];
-        } else {
-            document.getElementById('modalTp1Date').value = '';
+            modalTp1Fp.setDate(p[2] + '-' + p[1] + '-' + p[0], false);
+        } else if (modalTp1Fp) {
+            modalTp1Fp.clear();
         }
         document.getElementById('modalStatus').value = row[5] || 'Active';
         document.getElementById('modalDealLostReason').value = row[27] || '';
@@ -1419,10 +1418,10 @@
 
     window.saveContact = function() {
         const id = document.getElementById('modalContactId').value;
-        // Convert date input YYYY-MM-DD to DD-MM-YYYY
-        const tp1Raw = document.getElementById('modalTp1Date').value;
+        // Get date from flatpickr (YYYY-MM-DD) and convert to DD-MM-YYYY
+        const tp1Raw = modalTp1Fp ? modalTp1Fp.input.value : '';
         let tp1Display = '';
-        if (tp1Raw) {
+        if (tp1Raw && tp1Raw.match(/^\d{4}-\d{2}-\d{2}$/)) {
             const p = tp1Raw.split('-');
             tp1Display = p[2] + '-' + p[1] + '-' + p[0];
         }
@@ -1481,7 +1480,8 @@
 
     window.clearSchedule = function(tpNum) {
         if (!confirm('Clear schedule for Touchpoint ' + tpNum + '? This will clear the date for all contacts.')) return;
-        document.getElementById('schedDate' + tpNum).value = '';
+        const el = document.getElementById('schedDate' + tpNum);
+        if (el._flatpickr) el._flatpickr.clear();
         setSchedule(tpNum, '');
     };
 
@@ -1516,6 +1516,45 @@
         });
     };
 
+    // ── Flatpickr date pickers (disable Mon/Fri/weekends/holidays) ──
+    const _fpHolidays = {};
+    function _getHolidaysForYear(y) {
+        if (_fpHolidays[y]) return _fpHolidays[y];
+        _fpHolidays[y] = getUSHolidays(y);
+        return _fpHolidays[y];
+    }
+
+    const fpConfig = {
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'm/d/Y',
+        disable: [
+            function(date) {
+                const day = date.getDay();
+                // 0=Sun, 1=Mon, 5=Fri, 6=Sat
+                if (day === 0 || day === 1 || day === 5 || day === 6) return true;
+                const iso = date.getFullYear() + '-' +
+                    String(date.getMonth()+1).padStart(2,'0') + '-' +
+                    String(date.getDate()).padStart(2,'0');
+                const hols = _getHolidaysForYear(date.getFullYear());
+                return hols.includes(iso);
+            }
+        ],
+    };
+
+    // Init schedule date pickers
+    document.querySelectorAll('.tp-datepicker').forEach(function(el) {
+        const tpNum = el.getAttribute('data-tp');
+        flatpickr(el, Object.assign({}, fpConfig, {
+            onChange: function(selectedDates, dateStr) {
+                setSchedule(parseInt(tpNum), dateStr);
+            }
+        }));
+    });
+
+    // Init modal TP1 date picker
+    const modalTp1Fp = flatpickr('#modalTp1Date', Object.assign({}, fpConfig));
+
     // Load existing schedules on page load
     fetch('{% url "get_touchpoint_schedules" %}')
     .then(r => r.json())
@@ -1524,14 +1563,14 @@
             for (const [tp, dateVal] of Object.entries(data.schedules)) {
                 const input = document.getElementById('schedDate' + tp);
                 const status = document.getElementById('schedStatus' + tp);
-                if (input && dateVal) {
-                    // dateVal could be YYYY-MM-DD or DD-MM-YYYY
-                    if (dateVal.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                        input.value = dateVal;
-                    } else if (dateVal.match(/^\d{2}-\d{2}-\d{4}$/)) {
+                if (input && dateVal && input._flatpickr) {
+                    // Convert DD-MM-YYYY to YYYY-MM-DD for flatpickr
+                    let isoVal = dateVal;
+                    if (dateVal.match(/^\d{2}-\d{2}-\d{4}$/)) {
                         const parts = dateVal.split('-');
-                        input.value = parts[2] + '-' + parts[1] + '-' + parts[0];
+                        isoVal = parts[2] + '-' + parts[1] + '-' + parts[0];
                     }
+                    input._flatpickr.setDate(isoVal, false);
                     if (status) {
                         status.textContent = 'Scheduled: ' + dateVal;
                         status.className = 'schedule-status';
