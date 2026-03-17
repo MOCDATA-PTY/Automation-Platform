@@ -2325,6 +2325,7 @@ def stop_sending(request):
 
     # Write stop signal file for the worker to pick up
     stop_file = os.path.join(os.path.dirname(__file__), '..', f'send_stop_{job_id}.signal')
+    job_file = os.path.join(os.path.dirname(__file__), '..', f'send_job_{job_id}.json')
     try:
         with open(stop_file, 'w') as f:
             f.write('stop')
@@ -2332,6 +2333,22 @@ def stop_sending(request):
         tp_type = job_id.split('_')[0] if '_' in job_id else ''
         if tp_type:
             update_touchpoint_progress(tp_type, status='idle')
+        # Mark job file as done so stale state doesn't persist
+        try:
+            if os.path.exists(job_file):
+                with open(job_file) as jf:
+                    jdata = json.load(jf)
+                jdata['done'] = True
+                jdata['stopped'] = True
+                jdata['current'] = 'Stopped by user'
+                with open(job_file, 'w') as jf:
+                    json.dump(jdata, jf)
+        except Exception:
+            pass
+        # Kill the worker process
+        import subprocess
+        subprocess.Popen(['pkill', '-f', f'send_campaign_worker.*{job_id}'],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return JsonResponse({'ok': True, 'message': 'Stop signal sent'})
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=500)

@@ -1373,7 +1373,15 @@
         .then(r => r.json())
         .then(data => {
             if (data.ok) {
-                btn.textContent = 'Stopping...';
+                // Immediately reset UI - don't wait for worker
+                sendJobId = null;
+                document.getElementById('sendAllBtn').disabled = false;
+                document.getElementById('sendAllBtn').textContent = 'Send All';
+                btn.style.display = 'none';
+                btn.disabled = false;
+                btn.textContent = 'Stop Sending';
+                document.getElementById('progCurrent').textContent = 'Stopped.';
+                updateEligibleCount();
             } else {
                 alert('Error: ' + data.error);
                 btn.disabled = false;
