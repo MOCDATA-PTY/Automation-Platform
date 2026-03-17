@@ -2328,6 +2328,10 @@ def stop_sending(request):
     try:
         with open(stop_file, 'w') as f:
             f.write('stop')
+        # Extract tp number from job_id (e.g. "tp1_1234567890" -> "tp1")
+        tp_type = job_id.split('_')[0] if '_' in job_id else ''
+        if tp_type:
+            update_touchpoint_progress(tp_type, status='idle')
         return JsonResponse({'ok': True, 'message': 'Stop signal sent'})
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=500)

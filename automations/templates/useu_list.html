@@ -1249,6 +1249,13 @@
     let sendJobId = null;
     let pollLastIdx = 0;
 
+    // Reset buttons on page load (in case of stale state from previous session)
+    document.getElementById('sendAllBtn').disabled = false;
+    document.getElementById('sendAllBtn').textContent = 'Send All';
+    document.getElementById('stopSendBtn').style.display = 'none';
+    document.getElementById('stopSendBtn').disabled = false;
+    document.getElementById('stopSendBtn').textContent = 'Stop Sending';
+
     window.startSendAll = function() {
         const tpNum = document.getElementById('tpSelect').value;
         const btn = document.getElementById('sendAllBtn');
