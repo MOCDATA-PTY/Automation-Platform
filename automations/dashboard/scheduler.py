@@ -456,23 +456,34 @@ def check_bounce_emails():
         # Search for undeliverable/bounce messages in the last 24 hours
         headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
         # Filter for messages with common bounce subjects
-        url = (
+        base_url = (
             f"https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/messages"
             f"?$filter=isRead eq false and ("
             f"contains(subject,'Undeliverable') or "
             f"contains(subject,'Delivery has failed') or "
             f"contains(subject,'Mail delivery failed') or "
             f"contains(subject,'Returned mail') or "
-            f"contains(subject,'Non-delivery'))"
-            f"&$top=50&$select=id,subject,body,receivedDateTime"
+            f"contains(subject,'Non-delivery') or "
+            f"contains(subject,'Failure') or "
+            f"contains(subject,'could not be delivered'))"
+            f"&$top=200&$select=id,subject,body,receivedDateTime"
         )
 
-        r = http_requests.get(url, headers=headers, timeout=30)
-        if r.status_code != 200:
-            logger.warning(f"Bounce check: HTTP {r.status_code}")
-            return
+        # Paginate through all bounce messages
+        all_messages = []
+        url = base_url
+        while url:
+            r = http_requests.get(url, headers=headers, timeout=30)
+            if r.status_code != 200:
+                logger.warning(f"Bounce check: HTTP {r.status_code}")
+                break
+            data = r.json()
+            all_messages.extend(data.get('value', []))
+            url = data.get('@odata.nextLink')  # next page if exists
+            if len(all_messages) >= 1000:  # safety cap
+                break
 
-        messages = r.json().get('value', [])
+        messages = all_messages
         if not messages:
             return
 
