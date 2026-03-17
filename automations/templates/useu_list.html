@@ -1250,21 +1250,25 @@
     let pollLastIdx = 0;
 
     // Reset buttons on page load (in case of stale state from previous session)
+    console.log('[SEND] Page load reset — sendAllBtn:', document.getElementById('sendAllBtn'), 'stopSendBtn:', document.getElementById('stopSendBtn'));
     document.getElementById('sendAllBtn').disabled = false;
     document.getElementById('sendAllBtn').textContent = 'Send All';
     document.getElementById('stopSendBtn').style.display = 'none';
     document.getElementById('stopSendBtn').disabled = false;
     document.getElementById('stopSendBtn').textContent = 'Stop Sending';
+    console.log('[SEND] Page load reset complete. sendJobId:', sendJobId);
 
     window.startSendAll = function() {
         const tpNum = document.getElementById('tpSelect').value;
         const btn = document.getElementById('sendAllBtn');
+        console.log('[SEND] startSendAll called. tpNum:', tpNum);
 
         if (!confirm('Send TP' + tpNum + ' to all eligible contacts?')) return;
 
         btn.disabled = true;
         btn.textContent = 'Sending...';
         document.getElementById('stopSendBtn').style.display = 'inline-block';
+        console.log('[SEND] UI set to Sending. Posting to server...');
 
         // Update data-tp-type when touchpoint changes
         document.querySelector('[data-tp-type]').setAttribute('data-tp-type', `tp${tpNum}`);
@@ -1274,36 +1278,49 @@
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
             body: JSON.stringify({touchpoint_number: parseInt(tpNum)})
         })
-        .then(r => r.json())
+        .then(r => {
+            console.log('[SEND] Server response status:', r.status);
+            return r.json();
+        })
         .then(data => {
+            console.log('[SEND] Server response data:', JSON.stringify(data));
             if (!data.ok) {
                 alert('Error: ' + data.error);
                 btn.disabled = false;
                 btn.textContent = 'Send All';
+                document.getElementById('stopSendBtn').style.display = 'none';
                 document.getElementById('progressPanel').style.display = 'none';
                 return;
             }
             sendJobId = data.job_id;
+            console.log('[SEND] Job started. sendJobId:', sendJobId);
             pollLastIdx = 0;
             pollProgress();
         })
         .catch(err => {
+            console.error('[SEND] Error starting send:', err);
             alert('Error: ' + err.message);
             btn.disabled = false;
             btn.textContent = 'Send All';
+            document.getElementById('stopSendBtn').style.display = 'none';
         });
     };
 
     function pollProgress() {
-        if (!sendJobId) return;
+        if (!sendJobId) {
+            console.log('[POLL] pollProgress called but sendJobId is null, stopping poll');
+            return;
+        }
         const tpNum = parseInt(document.getElementById('tpSelect').value);
         const tpStatusCol = 5 + (tpNum * 2); // tp1 = col 7, tp2 = col 9
         const tpSentCol = 6 + (tpNum * 2);   // tp1_sent = col 8, tp2_sent = col 10
 
+        console.log('[POLL] Polling progress. sendJobId:', sendJobId, 'pollLastIdx:', pollLastIdx);
         fetch('{% url "send_all_progress" %}?job_id=' + sendJobId + '&last_idx=' + pollLastIdx)
         .then(r => r.json())
         .then(data => {
-            if (!data.ok) return;
+            console.log('[POLL] Response:', JSON.stringify({ok:data.ok, total:data.total, sent:data.sent, failed:data.failed, done:data.done, stopped:data.stopped, current:data.current}));
+            if (!data.ok) { console.warn('[POLL] data.ok is false'); return; }
 
             // Update rows in real-time
             data.results.forEach(res => {
@@ -1340,6 +1357,7 @@
             pollLastIdx = data.next_idx;
 
             if (data.done) {
+                console.log('[POLL] Job DONE. stopped:', data.stopped, 'sent:', data.sent, 'total:', data.total);
                 document.getElementById('sendAllBtn').disabled = false;
                 document.getElementById('sendAllBtn').textContent = 'Send All';
                 document.getElementById('stopSendBtn').style.display = 'none';
@@ -1351,29 +1369,43 @@
                 sendJobId = null;
                 updateEligibleCount();
             } else {
+                console.log('[POLL] Not done yet. sent:', data.sent, '/', data.total, 'current:', data.current);
                 setTimeout(pollProgress, 1000);
             }
         })
-        .catch(() => { setTimeout(pollProgress, 2000); });
+        .catch(err => { console.error('[POLL] Error:', err); setTimeout(pollProgress, 2000); });
     }
 
     window.stopSending = function() {
-        if (!sendJobId) return;
+        console.log('[STOP] stopSending called. sendJobId:', sendJobId);
+        if (!sendJobId) {
+            console.warn('[STOP] No sendJobId — cannot stop. Resetting UI anyway.');
+            document.getElementById('sendAllBtn').disabled = false;
+            document.getElementById('sendAllBtn').textContent = 'Send All';
+            document.getElementById('stopSendBtn').style.display = 'none';
+            return;
+        }
         if (!confirm('Stop sending? Emails already sent will not be undone.')) return;
 
         const btn = document.getElementById('stopSendBtn');
         btn.disabled = true;
         btn.textContent = 'Stopping...';
+        console.log('[STOP] Sending stop request for job:', sendJobId);
 
         fetch('{% url "stop_sending" %}', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
             body: JSON.stringify({job_id: sendJobId})
         })
-        .then(r => r.json())
+        .then(r => {
+            console.log('[STOP] Server response status:', r.status);
+            return r.json();
+        })
         .then(data => {
+            console.log('[STOP] Server response:', JSON.stringify(data));
             if (data.ok) {
                 // Immediately reset UI - don't wait for worker
+                console.log('[STOP] Stop confirmed. Resetting UI.');
                 sendJobId = null;
                 document.getElementById('sendAllBtn').disabled = false;
                 document.getElementById('sendAllBtn').textContent = 'Send All';
@@ -1383,12 +1415,14 @@
                 document.getElementById('progCurrent').textContent = 'Stopped.';
                 updateEligibleCount();
             } else {
+                console.error('[STOP] Stop failed:', data.error);
                 alert('Error: ' + data.error);
                 btn.disabled = false;
                 btn.textContent = 'Stop Sending';
             }
         })
         .catch(err => {
+            console.error('[STOP] Fetch error:', err);
             alert('Error: ' + err.message);
             btn.disabled = false;
             btn.textContent = 'Stop Sending';
