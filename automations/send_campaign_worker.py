@@ -148,9 +148,16 @@ def run_campaign(tp_num, job_id, job_file):
     DAILY_SEND_LIMIT = 2500  # Stay well under Microsoft's 10K/day limit
     MINUTE_SEND_LIMIT = 25   # Stay under 30/min recipient rate limit
     _minute_tracker = {'count': 0, 'window_start': time.time()}
+    _stop_file = os.path.join(project_root, f'send_stop_{job_id}.signal')
+    _stopped = {'value': False}
 
     def _send_one(contact):
         try:
+            # ── Stop signal check ──
+            if _stopped['value'] or os.path.exists(_stop_file):
+                _stopped['value'] = True
+                return
+
             email_addr = contact.email.strip()
             if not email_addr:
                 return
@@ -291,16 +298,23 @@ def run_campaign(tp_num, job_id, job_file):
     except Exception as e:
         print(f"[WORKER] Executor error: {e}", flush=True)
     finally:
+        stopped = _stopped['value']
         _write_job_file(job_file, {
             'total': total,
             'sent': state['sent'],
             'failed': state['failed'],
-            'current': '',
+            'current': 'Stopped by user' if stopped else '',
             'done': True,
+            'stopped': stopped,
             'results': [],
         })
         update_touchpoint_progress(tp_type, status='idle')
-        print(f"[WORKER] Complete — sent: {state['sent']}, failed: {state['failed']}", flush=True)
+        # Clean up stop signal file
+        try:
+            os.unlink(_stop_file)
+        except OSError:
+            pass
+        print(f"[WORKER] {'Stopped by user' if stopped else 'Complete'} — sent: {state['sent']}, failed: {state['failed']}", flush=True)
 
 
 if __name__ == '__main__':

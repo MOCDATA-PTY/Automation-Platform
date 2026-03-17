@@ -2310,6 +2310,30 @@ def send_all_touchpoint(request):
 
 
 @login_required
+def stop_sending(request):
+    """Stop an in-progress send campaign by writing a stop signal file."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST required'}, status=405)
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON'}, status=400)
+
+    job_id = data.get('job_id', '')
+    if not job_id:
+        return JsonResponse({'ok': False, 'error': 'No job_id provided'}, status=400)
+
+    # Write stop signal file for the worker to pick up
+    stop_file = os.path.join(os.path.dirname(__file__), '..', f'send_stop_{job_id}.signal')
+    try:
+        with open(stop_file, 'w') as f:
+            f.write('stop')
+        return JsonResponse({'ok': True, 'message': 'Stop signal sent'})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+
+
+@login_required
 def send_all_progress(request):
     """Poll progress of a send-all job."""
     job_id = request.GET.get('job_id', '')
@@ -2340,6 +2364,7 @@ def send_all_progress(request):
         'failed': progress.get('failed', 0),
         'current': progress.get('current', ''),
         'done': progress.get('done', False),
+        'stopped': progress.get('stopped', False),
         'results': new_results,
         'next_idx': len(all_results),
     })

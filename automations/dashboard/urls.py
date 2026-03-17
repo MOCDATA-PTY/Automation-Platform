@@ -82,6 +82,7 @@ urlpatterns = [
     path('useu-list/<int:contact_id>/delete/', views.useu_delete_contact, name='useu_delete_contact'),
     path('useu-list/send-all/', views.send_all_touchpoint, name='send_all_touchpoint'),
     path('useu-list/send-all/progress/', views.send_all_progress, name='send_all_progress'),
+    path('useu-list/send-all/stop/', views.stop_sending, name='stop_sending'),
     path('email-templates/', views.email_templates, name='email_templates'),
     path('email-templates/save/', views.email_template_save, name='email_template_save'),
     path('email-templates/send/', views.send_touchpoint, name='send_touchpoint'),

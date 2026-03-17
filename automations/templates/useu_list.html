@@ -726,6 +726,7 @@
             <option value="10">TP 10</option>
         </select>
         <button class="send-all-btn" id="sendAllBtn" onclick="startSendAll()">Send All</button>
+        <button class="send-all-btn" id="stopSendBtn" onclick="stopSending()" style="display:none;background:#dc3545;">Stop Sending</button>
         <span class="eligible-count" id="eligibleCount"></span>
     </div>
     
@@ -1256,6 +1257,7 @@
 
         btn.disabled = true;
         btn.textContent = 'Sending...';
+        document.getElementById('stopSendBtn').style.display = 'inline-block';
 
         // Update data-tp-type when touchpoint changes
         document.querySelector('[data-tp-type]').setAttribute('data-tp-type', `tp${tpNum}`);
@@ -1333,7 +1335,12 @@
             if (data.done) {
                 document.getElementById('sendAllBtn').disabled = false;
                 document.getElementById('sendAllBtn').textContent = 'Send All';
-                document.getElementById('progCurrent').textContent = 'Complete! Sent ' + data.sent + ' of ' + data.total + '.';
+                document.getElementById('stopSendBtn').style.display = 'none';
+                if (data.stopped) {
+                    document.getElementById('progCurrent').textContent = 'Stopped. Sent ' + data.sent + ' of ' + data.total + '.';
+                } else {
+                    document.getElementById('progCurrent').textContent = 'Complete! Sent ' + data.sent + ' of ' + data.total + '.';
+                }
                 sendJobId = null;
                 updateEligibleCount();
             } else {
@@ -1342,6 +1349,36 @@
         })
         .catch(() => { setTimeout(pollProgress, 2000); });
     }
+
+    window.stopSending = function() {
+        if (!sendJobId) return;
+        if (!confirm('Stop sending? Emails already sent will not be undone.')) return;
+
+        const btn = document.getElementById('stopSendBtn');
+        btn.disabled = true;
+        btn.textContent = 'Stopping...';
+
+        fetch('{% url "stop_sending" %}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({job_id: sendJobId})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                btn.textContent = 'Stopping...';
+            } else {
+                alert('Error: ' + data.error);
+                btn.disabled = false;
+                btn.textContent = 'Stop Sending';
+            }
+        })
+        .catch(err => {
+            alert('Error: ' + err.message);
+            btn.disabled = false;
+            btn.textContent = 'Stop Sending';
+        });
+    };
 
     renderPage();
 
