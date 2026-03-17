@@ -443,7 +443,7 @@
         {% block content %}{% endblock %}
 
         {% with url_name=request.resolver_match.url_name %}
-        {% if url_name not in 'home,sync_monitor,login,logout,email_templates' %}
+        {% if url_name not in 'home,sync_monitor,login,logout,email_templates,useu_list' %}
         <div class="powerbi-section" id="powerbi-section">
             <div class="powerbi-header">
                 <div class="powerbi-title">
