@@ -379,6 +379,17 @@ def run_scheduled_touchpoints():
     today_str = today.strftime('%d-%m-%Y')
     logger.info(f"Checking scheduled touchpoints for {today_str}...")
 
+    # Don't send on Monday (0), Friday (4), Saturday (5), Sunday (6)
+    if today.weekday() in (0, 4, 5, 6):
+        logger.info(f"Skipping touchpoint sends — today is {today.strftime('%A')} (no sends on Mon/Fri/weekends)")
+        return
+
+    # Don't send on US public holidays
+    from .views import _us_holidays
+    if today in _us_holidays(today.year):
+        logger.info(f"Skipping touchpoint sends — today is a US public holiday")
+        return
+
     for tp_num in range(2, 11):
         # Check template exists (needed for email content)
         try:
