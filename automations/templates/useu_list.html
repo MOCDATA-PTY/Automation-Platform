@@ -342,6 +342,23 @@
     min-height: 16px;
 }
 .tp-schedule-item .schedule-status.pending { color: var(--text-secondary); }
+.sched-clear-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: #c0392b;
+    font-size: 16px;
+    font-weight: 700;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+}
+.sched-clear-btn:hover { background: #fdecea; border-color: #c0392b; }
 
 .send-progress-panel {
     display: none;
@@ -469,13 +486,19 @@
             {% for tp_num in "23456789" %}
             <div class="tp-schedule-item">
                 <label>Touchpoint {{ tp_num }}</label>
-                <input type="date" id="schedDate{{ tp_num }}" onchange="setSchedule({{ tp_num }}, this.value)">
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <input type="date" id="schedDate{{ tp_num }}" onchange="setSchedule({{ tp_num }}, this.value)" style="flex:1;">
+                    <button class="sched-clear-btn" onclick="clearSchedule({{ tp_num }})" title="Clear">&times;</button>
+                </div>
                 <span class="schedule-status pending" id="schedStatus{{ tp_num }}"></span>
             </div>
             {% endfor %}
             <div class="tp-schedule-item">
                 <label>Touchpoint 10</label>
-                <input type="date" id="schedDate10" onchange="setSchedule(10, this.value)">
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <input type="date" id="schedDate10" onchange="setSchedule(10, this.value)" style="flex:1;">
+                    <button class="sched-clear-btn" onclick="clearSchedule(10)" title="Clear">&times;</button>
+                </div>
                 <span class="schedule-status pending" id="schedStatus10"></span>
             </div>
         </div>
@@ -966,6 +989,12 @@
         const arrow = document.getElementById('scheduleArrow');
         grid.classList.toggle('open');
         arrow.classList.toggle('open');
+    };
+
+    window.clearSchedule = function(tpNum) {
+        if (!confirm('Clear schedule for Touchpoint ' + tpNum + '? This will clear the date for all contacts.')) return;
+        document.getElementById('schedDate' + tpNum).value = '';
+        setSchedule(tpNum, '');
     };
 
     window.setSchedule = function(tpNum, dateStr) {
