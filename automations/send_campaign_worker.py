@@ -143,14 +143,38 @@ def run_campaign(tp_num, job_id, job_file):
 
     now_str = datetime.now().strftime('%d/%m/%Y')
     _progress_lock = threading.Lock()
-    _throttle = [3.0]
+    _throttle = [4.0]  # 4s between emails = ~15/min (well under 30/min Graph limit)
     state = {'sent': 0, 'failed': 0}
+    DAILY_SEND_LIMIT = 2500  # Stay well under Microsoft's 10K/day limit
+    MINUTE_SEND_LIMIT = 25   # Stay under 30/min recipient rate limit
+    _minute_tracker = {'count': 0, 'window_start': time.time()}
 
     def _send_one(contact):
         try:
             email_addr = contact.email.strip()
             if not email_addr:
                 return
+
+            # ── Daily limit check ──
+            with _progress_lock:
+                if state['sent'] >= DAILY_SEND_LIMIT:
+                    print(f"[WORKER] Daily limit of {DAILY_SEND_LIMIT} reached. Stopping.", flush=True)
+                    return
+
+            # ── Per-minute rate limit ──
+            with _progress_lock:
+                now = time.time()
+                elapsed = now - _minute_tracker['window_start']
+                if elapsed >= 60:
+                    _minute_tracker['count'] = 0
+                    _minute_tracker['window_start'] = now
+                if _minute_tracker['count'] >= MINUTE_SEND_LIMIT:
+                    wait_time = 60 - elapsed + 2  # wait until window resets + buffer
+                    print(f"[WORKER] Minute limit ({MINUTE_SEND_LIMIT}/min) reached, waiting {wait_time:.0f}s", flush=True)
+                    time.sleep(max(wait_time, 1))
+                    _minute_tracker['count'] = 0
+                    _minute_tracker['window_start'] = time.time()
+                _minute_tracker['count'] += 1
 
             time.sleep(_throttle[0])
 
@@ -234,8 +258,7 @@ def run_campaign(tp_num, job_id, job_file):
                     _status = 0
                     time.sleep(3 * (attempt + 1))
 
-            if sent_ok:
-                _throttle[0] = max(_throttle[0] * 0.95, 1.5)
+            # Keep throttle steady — do not speed up to avoid hitting limits
 
             with _progress_lock:
                 if _is_undeliverable:
@@ -262,7 +285,8 @@ def run_campaign(tp_num, job_id, job_file):
                 state['failed'] += 1
 
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        # Single worker thread to guarantee rate limits are respected
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             pool.map(_send_one, contacts)
     except Exception as e:
         print(f"[WORKER] Executor error: {e}", flush=True)
