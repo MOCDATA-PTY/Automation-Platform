@@ -130,6 +130,7 @@ class TouchpointTemplate(models.Model):
     signature = models.TextField(default='', blank=True)
     attachment = models.FileField(upload_to='touchpoint_attachments/', blank=True, null=True)
     days_after_previous = models.IntegerField(default=7, help_text='Days after previous touchpoint to send this one')
+    scheduled_date = models.DateField(null=True, blank=True, help_text='Fixed date to automatically send this touchpoint')
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

@@ -77,6 +77,7 @@ def home(request):
         'fax': 'fax_pnl', 'hnl': 'hnl_pnl', 'hou': 'hou_pnl',
         'ics': 'ics_pnl', 'imp': 'imp_pnl', 'jfk': 'jfk_pnl',
         'lax': 'lax_pnl', 'lcl': 'lcl_pnl', 'ord': 'ord_pnl',
+        'dfw': 'dfw_pnl',
     }
     station_rows = {}
     for key, table in station_tables.items():
@@ -1398,6 +1399,81 @@ def sync_ord_progress(request):
 
 
 @login_required
+def dfw(request):
+    """DFW Financial Analysis page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM dfw_pnl")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM dfw_pnl WHERE budget_actual LIKE '%Budget%'")
+            budget_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM dfw_pnl WHERE budget_actual LIKE '%Actual%'")
+            actual_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT account_name) FROM dfw_pnl")
+            account_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = budget_count = actual_count = account_count = 0
+
+    last_sync = onedrive_sync.get_dfw_last_sync()
+
+    return render(request, 'dfw.html', {
+        'total_records': total_records,
+        'budget_count': budget_count,
+        'actual_count': actual_count,
+        'account_count': account_count,
+        'last_sync': last_sync
+    })
+
+
+# DFW sync progress tracking
+dfw_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_dfw_progress(status, message, current=0, total=0):
+    global dfw_sync_progress
+    dfw_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_dfw(request):
+    """Sync DFW data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_dfw_progress('starting', 'Starting DFW sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_dfw_progress('syncing', 'Checking OneDrive for DFW files...', 10, 100)
+                count = onedrive_sync.sync_dfw_data()
+                if count > 0:
+                    update_dfw_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_dfw_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_dfw_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_dfw_progress(request):
+    """Get DFW sync progress"""
+    return JsonResponse(dfw_sync_progress)
+
+
+@login_required
 def creditor(request):
     """Creditor Transaction Report page"""
     try:
@@ -1486,7 +1562,8 @@ STATION_TABLES = {
     'con': 'con_pnl', 'dor': 'dor_pnl', 'fax': 'fax_pnl',
     'hnl': 'hnl_pnl', 'hou': 'hou_pnl', 'ics': 'ics_pnl',
     'imp': 'imp_pnl', 'jfk': 'jfk_pnl', 'lax': 'lax_pnl',
-    'lcl': 'lcl_pnl', 'ord': 'ord_pnl', 'ppg': 'ppg_pnl',
+    'lcl': 'lcl_pnl', 'ord': 'ord_pnl', 'dfw': 'dfw_pnl',
+    'ppg': 'ppg_pnl',
 }
 
 
@@ -2087,6 +2164,78 @@ def email_template_save(request):
         'attachment_url': att_url,
         'body_html': template.body_html,
     })
+
+
+# ── Touchpoint Schedule ──────────────────────────────────────────────────────
+
+@login_required
+def set_touchpoint_schedule(request):
+    """Set the scheduled date for a touchpoint and update all contacts' touchpoint_X field."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST required'}, status=405)
+    try:
+        data = json.loads(request.body)
+        tp_num = int(data.get('touchpoint_number', 0))
+        date_str = data.get('scheduled_date', '')  # YYYY-MM-DD or empty to clear
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return JsonResponse({'ok': False, 'error': 'Invalid data'}, status=400)
+
+    if tp_num < 2 or tp_num > 10:
+        return JsonResponse({'ok': False, 'error': 'Invalid touchpoint number (2-10 only)'}, status=400)
+
+    tp_field = f'touchpoint_{tp_num}'
+
+    if date_str:
+        # Parse and format as DD-MM-YYYY for the contacts field
+        from datetime import datetime as dt
+        try:
+            parsed = dt.strptime(date_str, '%Y-%m-%d')
+            display_date = parsed.strftime('%d-%m-%Y')
+        except ValueError:
+            return JsonResponse({'ok': False, 'error': 'Invalid date format'}, status=400)
+
+        # Update all contacts' touchpoint_X field to this date
+        updated = USEUContact.objects.all().update(**{tp_field: display_date})
+
+        # Save to template's scheduled_date
+        template, _ = TouchpointTemplate.objects.update_or_create(
+            touchpoint_number=tp_num,
+            defaults={'scheduled_date': parsed.date()}
+        )
+
+        return JsonResponse({'ok': True, 'updated': updated, 'date': display_date})
+    else:
+        # Clear the schedule
+        USEUContact.objects.all().update(**{tp_field: ''})
+        try:
+            template = TouchpointTemplate.objects.get(touchpoint_number=tp_num)
+            template.scheduled_date = None
+            template.save(update_fields=['scheduled_date'])
+        except TouchpointTemplate.DoesNotExist:
+            pass
+        return JsonResponse({'ok': True, 'updated': 0, 'date': ''})
+
+
+@login_required
+def get_touchpoint_schedules(request):
+    """Get current scheduled dates for all touchpoints."""
+    schedules = {}
+    # Get from templates
+    for t in TouchpointTemplate.objects.all():
+        if t.scheduled_date:
+            schedules[t.touchpoint_number] = t.scheduled_date.strftime('%Y-%m-%d')
+
+    # Also check what's actually set on contacts for each TP
+    from django.db import connection
+    with connection.cursor() as cur:
+        for tp_num in range(2, 11):
+            field = f'touchpoint_{tp_num}'
+            cur.execute(f"SELECT {field}, COUNT(*) FROM useu_contacts WHERE {field} IS NOT NULL AND {field} != '' GROUP BY {field} ORDER BY COUNT(*) DESC LIMIT 1")
+            row = cur.fetchone()
+            if row and tp_num not in schedules:
+                schedules[tp_num] = row[0]  # Show what's currently set
+
+    return JsonResponse({'ok': True, 'schedules': schedules})
 
 
 # ── Send Touchpoint Email ─────────────────────────────────────────────────────

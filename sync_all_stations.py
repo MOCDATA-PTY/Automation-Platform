@@ -17,7 +17,8 @@ from dashboard.onedrive_sync import (
     sync_atl_data, sync_ccc_data, sync_ccd_data,
     sync_fax_data, sync_hnl_data, sync_hou_data,
     sync_ics_data, sync_imp_data, sync_jfk_data,
-    sync_lax_data, sync_lcl_data, sync_ord_data
+    sync_lax_data, sync_lcl_data, sync_ord_data,
+    sync_dfw_data
 )
 
 # List of stations to sync (excluding CONDOR+DOR)
@@ -37,6 +38,7 @@ stations = [
     ('LAX', sync_lax_data),
     ('LCL', sync_lcl_data),
     ('ORD', sync_ord_data),
+    ('DFW', sync_dfw_data),
 ]
 
 print("="*80)

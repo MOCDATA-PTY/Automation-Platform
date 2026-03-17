@@ -3598,3 +3598,149 @@ def get_condor_dor_last_sync():
             return data
     except:
         return None
+
+
+# ==================== DFW Functions ====================
+
+def process_dfw_excel_file(file_content, filename):
+    """Process DFW Excel file - reads 'GL PL Period Analysis' sheet"""
+    rows = process_ppg_excel_file(file_content, filename.replace('DFW', 'PPG'))
+    return [(("DFW",) + row[1:]) for row in rows]
+
+
+def sync_dfw_data():
+    """Sync DFW data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_DFW_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in DFW folder")
+
+    all_rows = []
+    processed_files = []
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            rows = process_dfw_excel_file(file_content, file_info['name'])
+            all_rows.extend(rows)
+            print(f"  Extracted {len(rows)} records")
+            processed_files.append(file_info)
+
+    if all_rows:
+        with connection.cursor() as cur:
+            unique_month_weeks = set((row[3], row[6]) for row in all_rows)
+            unique_months = set(row[3] for row in all_rows)
+
+            print(f"\n🔍 DEBUG - Before deletion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM dfw_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+            print(f"\n🗑️  Will DELETE and replace these (month, week) combinations:")
+            for month, week in sorted(unique_month_weeks):
+                print(f"  - {month}, {week}")
+
+            for month, week in unique_month_weeks:
+                cur.execute(
+                    "DELETE FROM dfw_pnl WHERE date = %s AND week = %s AND budget_actual = 'Actual'",
+                    (month, week)
+                )
+            print(f"\n✓ Deleted old Actual week records for {len(unique_month_weeks)} (month, week) combinations")
+
+            for month in unique_months:
+                cur.execute(
+                    "DELETE FROM dfw_pnl WHERE date = %s AND week = 'Total' AND budget_actual = 'Actual'",
+                    (month,)
+                )
+            print(f"  Deleted old Actual 'Total' records for {len(unique_months)} months")
+
+            week_query = """
+                INSERT INTO dfw_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
+                VALUES %s
+            """
+            execute_values(cur, week_query, all_rows)
+            print(f"  Inserted {len(all_rows)} week records")
+
+            from collections import defaultdict
+            rows_by_month = defaultdict(list)
+            for row in all_rows:
+                rows_by_month[row[3]].append(row)
+
+            total_count = 0
+            for month, month_rows in rows_by_month.items():
+                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                execute_values(cur, week_query, total_rows)
+                total_count += len(total_rows)
+                print(f"  Inserted {len(total_rows)} Total records for month {month}")
+
+            print(f"  Total: {total_count} Total records inserted")
+
+            print(f"\n🔍 DEBUG - After insertion:")
+            for month in sorted(unique_months):
+                cur.execute("""
+                    SELECT week, COUNT(*)
+                    FROM dfw_pnl
+                    WHERE date = %s AND budget_actual = 'Actual'
+                    GROUP BY week
+                    ORDER BY week
+                """, (month,))
+                weeks = cur.fetchall()
+                if weeks:
+                    week_summary = ", ".join([f"{w}({c})" for w, c in weeks])
+                    print(f"  Month {month}: {week_summary}")
+
+        print(f"\n✓ Imported {len(all_rows)} week records + {len(all_rows)} Total records")
+        print(f"✅ Other weeks preserved (not deleted)")
+
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        deleted_count = 0
+        for file_info in processed_files:
+            if delete_file(file_info['id']):
+                print(f"  ✓ Deleted: {file_info['name']}")
+                deleted_count += 1
+            else:
+                print(f"  ✗ Failed to delete: {file_info['name']}")
+        print(f"✓ Deleted {deleted_count}/{len(processed_files)} files from OneDrive")
+    else:
+        print(f"\n✓ No files to sync")
+
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
+    with open(settings.DFW_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_dfw_last_sync():
+    """Get the last DFW sync info"""
+    try:
+        with open(settings.DFW_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None

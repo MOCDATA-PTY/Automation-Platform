@@ -320,6 +320,23 @@ def run_ord_sync_job():
         update_sync_health('ord', 'error', str(e))
 
 
+def run_dfw_sync_job():
+    """Run the DFW sync job"""
+    from . import onedrive_sync
+    from .views import update_dfw_progress
+    try:
+        logger.info("Starting scheduled DFW sync...")
+        update_dfw_progress('running', 'Scheduled DFW sync starting...', 0, 100)
+        count = onedrive_sync.sync_dfw_data()
+        logger.info(f"Scheduled DFW sync complete: {count} records synced")
+        update_dfw_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('dfw', 'success', f'No file' if count == 0 else f'Synced {count} records', count)
+    except Exception as e:
+        logger.error(f"Scheduled DFW sync error: {e}")
+        update_dfw_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('dfw', 'error', str(e))
+
+
 def run_creditor_sync_job():
     """Run the Creditor sync job"""
     from . import onedrive_sync
@@ -517,6 +534,15 @@ def start_scheduler():
         trigger=IntervalTrigger(hours=1),
         id='ord_sync',
         name='Sync ORD data every hour',
+        replace_existing=True
+    )
+
+    # Run DFW sync every hour
+    scheduler.add_job(
+        run_dfw_sync_job,
+        trigger=IntervalTrigger(hours=1),
+        id='dfw_sync',
+        name='Sync DFW data every hour',
         replace_existing=True
     )
 

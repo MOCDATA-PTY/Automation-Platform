@@ -497,6 +497,18 @@
         </div>
     </a>
 
+    <a href="{% url 'dfw' %}" class="project-card">
+        <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+        <div class="project-header">
+            <div class="project-icon"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
+            <div class="project-info"><h3 class="project-title">DFW Financial Analysis</h3><span class="project-status">Active</span></div>
+        </div>
+        <p class="project-description">DFW Budget vs Actual P&L for Power BI.</p>
+        <div class="project-stats">
+            <div class="stat"><span class="stat-value">{{ dfw_rows|default:"--"|intcomma }}</span><span class="stat-label">Records</span></div>
+        </div>
+    </a>
+
     <a href="{% url 'ppg' %}" class="project-card">
         <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         <div class="project-header">

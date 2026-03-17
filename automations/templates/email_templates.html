@@ -138,6 +138,87 @@
 .save-status { font-size: 12px; color: #1e7e34; opacity: 0; transition: opacity 0.3s; }
 .save-status.show { opacity: 1; }
 
+/* Schedule section */
+.schedule-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+.schedule-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+.schedule-subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 18px;
+}
+.schedule-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+.schedule-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface2, #f8f9fa);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+[data-theme="dark"] .schedule-row { background: rgba(255,255,255,0.03); }
+.schedule-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 40px;
+}
+.schedule-date {
+    flex: 1;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 13px;
+    background: var(--surface);
+    color: var(--text-primary);
+}
+.schedule-date:focus { outline: none; border-color: #054B70; }
+.schedule-set-btn {
+    padding: 7px 14px;
+    background: #054B70;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.schedule-set-btn:hover { background: #03334e; }
+.schedule-set-btn:disabled { opacity: 0.5; cursor: default; }
+.schedule-clear-btn {
+    padding: 7px 10px;
+    background: none;
+    color: #c0392b;
+    border: 1px solid #c0392b;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.schedule-clear-btn:hover { background: rgba(192,57,43,0.08); }
+.schedule-status {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+.schedule-status.set { color: #1e7e34; }
+
 /* Variables hint */
 .variables-hint {
     background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
@@ -180,6 +261,12 @@
     <div class="banner-eyebrow">Configuration</div>
     <div class="banner-title">Email Templates</div>
     <div class="banner-subtitle">Configure the email content, signature, and attachment for each touchpoint (1–10)</div>
+</div>
+
+<div class="schedule-card">
+    <div class="schedule-title">Touchpoint Schedule</div>
+    <div class="schedule-subtitle">Set the date each touchpoint will be sent out. This updates all contacts' scheduled date for that touchpoint.</div>
+    <div class="schedule-grid" id="scheduleGrid"></div>
 </div>
 
 <div class="tp-tabs" id="tpTabs"></div>
@@ -438,6 +525,98 @@
 
     renderTabs();
     loadTemplate(1);
+
+    // ── Schedule Section ──
+    const scheduleGrid = document.getElementById('scheduleGrid');
+    const schedules = {};
+
+    function renderScheduleGrid() {
+        let html = '';
+        for (let i = 2; i <= 10; i++) {
+            const val = schedules[i] || '';
+            const hasDate = !!val;
+            // Convert DD-MM-YYYY display format back to YYYY-MM-DD for date input
+            let inputVal = '';
+            if (val) {
+                const parts = val.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+                if (parts) {
+                    inputVal = parts[3] + '-' + parts[2] + '-' + parts[1];
+                } else {
+                    inputVal = val; // already YYYY-MM-DD
+                }
+            }
+            html += '<div class="schedule-row">'
+                + '<span class="schedule-label">TP ' + i + '</span>'
+                + '<input type="date" class="schedule-date" id="schedDate' + i + '" value="' + inputVal + '">'
+                + '<button class="schedule-set-btn" onclick="setSchedule(' + i + ')" id="schedBtn' + i + '">Set</button>'
+                + (hasDate ? '<button class="schedule-clear-btn" onclick="clearSchedule(' + i + ')">Clear</button>' : '')
+                + '</div>';
+        }
+        scheduleGrid.innerHTML = html;
+    }
+
+    function loadSchedules() {
+        fetch('{% url "get_touchpoint_schedules" %}')
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    Object.assign(schedules, data.schedules);
+                    renderScheduleGrid();
+                }
+            });
+    }
+
+    window.setSchedule = function(tpNum) {
+        const dateInput = document.getElementById('schedDate' + tpNum);
+        const dateVal = dateInput.value;
+        if (!dateVal) { alert('Please select a date first.'); return; }
+
+        const btn = document.getElementById('schedBtn' + tpNum);
+        btn.disabled = true;
+        btn.textContent = 'Setting...';
+
+        fetch('{% url "set_touchpoint_schedule" %}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({touchpoint_number: tpNum, scheduled_date: dateVal})
+        })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.textContent = 'Set';
+            if (data.ok) {
+                schedules[tpNum] = data.date || dateVal;
+                renderScheduleGrid();
+                alert('TP' + tpNum + ' scheduled for ' + data.date + ' — updated ' + data.updated + ' contacts.');
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.textContent = 'Set';
+            alert('Network error');
+        });
+    };
+
+    window.clearSchedule = function(tpNum) {
+        if (!confirm('Clear the scheduled date for TP' + tpNum + '? This will remove the date from all contacts.')) return;
+
+        fetch('{% url "set_touchpoint_schedule" %}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({touchpoint_number: tpNum, scheduled_date: ''})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                delete schedules[tpNum];
+                renderScheduleGrid();
+            }
+        });
+    };
+
+    loadSchedules();
 })();
 </script>
 {% endblock %}
