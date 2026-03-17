@@ -363,6 +363,66 @@ def run_condor_dor_sync_job():
         update_sync_health('condor_dor', 'error', str(e))
 
 
+def run_scheduled_touchpoints():
+    """Check if any touchpoints are scheduled for today and send them."""
+    from .models import TouchpointTemplate, USEUContact
+    from . import onedrive_sync
+    import subprocess
+    import sys as _sys
+
+    today = datetime.now(ZoneInfo('Africa/Johannesburg')).date()
+    logger.info(f"Checking scheduled touchpoints for {today}...")
+
+    for tp_num in range(2, 11):
+        try:
+            template = TouchpointTemplate.objects.get(touchpoint_number=tp_num)
+        except TouchpointTemplate.DoesNotExist:
+            continue
+
+        if not template.scheduled_date or template.scheduled_date != today:
+            continue
+
+        tp_sent_field = f'tp{tp_num}_sent_on'
+        eligible = USEUContact.objects.filter(
+            status='Active',
+            **{tp_sent_field: ''}
+        ).exclude(email='').exclude(email__isnull=True).count()
+
+        if eligible == 0:
+            logger.info(f"TP{tp_num} scheduled for today but no eligible contacts")
+            continue
+
+        logger.info(f"TP{tp_num} scheduled for today - {eligible} eligible contacts, launching send...")
+
+        job_id = f'tp{tp_num}_auto_{int(datetime.now().timestamp())}'
+
+        # Create job file for progress tracking
+        _job_file = os.path.join(os.path.dirname(__file__), '..', f'send_job_{job_id}.json')
+        try:
+            import tempfile as _tempfile
+            _fd, _tmp = _tempfile.mkstemp(dir=os.path.dirname(_job_file), suffix='.tmp')
+            with os.fdopen(_fd, 'w') as _f:
+                json.dump({'total': eligible, 'sent': 0, 'failed': 0, 'current': '', 'done': False, 'results': []}, _f)
+            os.replace(_tmp, _job_file)
+        except Exception:
+            pass
+
+        # Launch the worker subprocess
+        _worker = os.path.join(os.path.dirname(__file__), '..', 'send_campaign_worker.py')
+        try:
+            subprocess.Popen(
+                [_sys.executable, _worker, '--tp-num', str(tp_num), '--job-id', job_id],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            logger.info(f"TP{tp_num} send launched with job_id={job_id}")
+            update_sync_health(f'tp{tp_num}_auto', 'success', f'Auto-sent to {eligible} contacts')
+        except Exception as e:
+            logger.error(f"Failed to launch TP{tp_num} send: {e}")
+            update_sync_health(f'tp{tp_num}_auto', 'error', str(e))
+
+
 def refresh_onedrive_token():
     """Refresh the OneDrive access token to keep it alive.
 
@@ -561,6 +621,15 @@ def start_scheduler():
         trigger=IntervalTrigger(hours=1),
         id='condor_dor_sync',
         name='Sync Condor+DOR PNL data every hour',
+        replace_existing=True
+    )
+
+    # Check for scheduled touchpoints every 30 minutes
+    scheduler.add_job(
+        run_scheduled_touchpoints,
+        trigger=IntervalTrigger(minutes=30),
+        id='scheduled_touchpoints',
+        name='Check and send scheduled touchpoints',
         replace_existing=True
     )
 
