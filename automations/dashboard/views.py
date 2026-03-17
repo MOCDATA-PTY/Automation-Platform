@@ -1997,9 +1997,140 @@ def useu_update_cell(request):
         contact = USEUContact.objects.get(id=contact_id)
         setattr(contact, field, value)
         contact.save(update_fields=[field])
-        return JsonResponse({'ok': True})
+
+        # Auto-calculate TP2-TP10 when TP1 date is set
+        tp_dates = {}
+        if field == 'touchpoint_1' and value:
+            tp_dates = _auto_calc_tp_dates(contact, value)
+
+        return JsonResponse({'ok': True, 'tp_dates': tp_dates})
     except USEUContact.DoesNotExist:
         return JsonResponse({'ok': False, 'error': 'Not found'}, status=404)
+
+
+# ── US Public Holidays & TP Date Calculation ──────────────────────────────────
+
+def _us_holidays(year):
+    """Return a set of US federal holiday dates for a given year."""
+    from datetime import date
+    holidays = set()
+
+    # New Year's Day - Jan 1
+    holidays.add(date(year, 1, 1))
+
+    # MLK Day - 3rd Monday of January
+    d = date(year, 1, 1)
+    mondays = 0
+    while mondays < 3:
+        if d.weekday() == 0:
+            mondays += 1
+            if mondays == 3:
+                break
+        d += timedelta(days=1)
+    holidays.add(d)
+
+    # Presidents Day - 3rd Monday of February
+    d = date(year, 2, 1)
+    mondays = 0
+    while mondays < 3:
+        if d.weekday() == 0:
+            mondays += 1
+            if mondays == 3:
+                break
+        d += timedelta(days=1)
+    holidays.add(d)
+
+    # Memorial Day - Last Monday of May
+    d = date(year, 5, 31)
+    while d.weekday() != 0:
+        d -= timedelta(days=1)
+    holidays.add(d)
+
+    # Juneteenth - June 19
+    holidays.add(date(year, 6, 19))
+
+    # Independence Day - July 4
+    holidays.add(date(year, 7, 4))
+
+    # Labor Day - 1st Monday of September
+    d = date(year, 9, 1)
+    while d.weekday() != 0:
+        d += timedelta(days=1)
+    holidays.add(d)
+
+    # Columbus Day - 2nd Monday of October
+    d = date(year, 10, 1)
+    mondays = 0
+    while mondays < 2:
+        if d.weekday() == 0:
+            mondays += 1
+            if mondays == 2:
+                break
+        d += timedelta(days=1)
+    holidays.add(d)
+
+    # Veterans Day - November 11
+    holidays.add(date(year, 11, 11))
+
+    # Thanksgiving - 4th Thursday of November
+    d = date(year, 11, 1)
+    thursdays = 0
+    while thursdays < 4:
+        if d.weekday() == 3:
+            thursdays += 1
+            if thursdays == 4:
+                break
+        d += timedelta(days=1)
+    holidays.add(d)
+
+    # Christmas Day - December 25
+    holidays.add(date(year, 12, 25))
+
+    return holidays
+
+
+def _next_valid_send_date(start_date):
+    """Given a date, return the next valid send date (Tue/Wed/Thu, not a US holiday)."""
+    d = start_date
+    holidays = _us_holidays(d.year) | _us_holidays(d.year + 1)
+    for _ in range(30):  # safety limit
+        # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+        if d.weekday() in (1, 2, 3) and d not in holidays:
+            return d
+        d += timedelta(days=1)
+    return d
+
+
+def _auto_calc_tp_dates(contact, tp1_value):
+    """Calculate TP2-TP10 dates based on TP1, 8 days apart, skipping Mon/Fri/weekends/holidays."""
+    # Parse TP1 date (DD-MM-YYYY format)
+    try:
+        parts = tp1_value.strip().split('-')
+        if len(parts) == 3 and len(parts[2]) == 4:
+            tp1_date = datetime.strptime(tp1_value.strip(), '%d-%m-%Y').date()
+        elif len(parts) == 3 and len(parts[0]) == 4:
+            tp1_date = datetime.strptime(tp1_value.strip(), '%Y-%m-%d').date()
+        else:
+            return {}
+    except (ValueError, AttributeError):
+        return {}
+
+    tp_dates = {}
+    prev_date = tp1_date
+
+    for tp_num in range(2, 11):
+        # 8 calendar days after previous TP
+        candidate = prev_date + timedelta(days=8)
+        # Shift to next valid day (Tue/Wed/Thu, no holidays)
+        send_date = _next_valid_send_date(candidate)
+        display_date = send_date.strftime('%d-%m-%Y')
+
+        setattr(contact, f'touchpoint_{tp_num}', display_date)
+        tp_dates[f'touchpoint_{tp_num}'] = display_date
+        prev_date = send_date
+
+    contact.save(update_fields=[f'touchpoint_{n}' for n in range(2, 11)])
+    return tp_dates
 
 
 @login_required
@@ -2019,7 +2150,15 @@ def useu_create_contact(request):
         status=data.get('status', 'Active'),
         deal_lost_reason=data.get('deal_lost_reason', ''),
     )
+    tp1_date = data.get('tp1_date', '')
+    if tp1_date:
+        contact.touchpoint_1 = tp1_date
     contact.save()
+
+    # Auto-calc TP2-TP10 if TP1 date was provided
+    if tp1_date:
+        _auto_calc_tp_dates(contact, tp1_date)
+
     return JsonResponse({'ok': True, 'id': contact.id})
 
 
@@ -2040,7 +2179,16 @@ def useu_edit_contact(request, contact_id):
     for field in ['org_name', 'contact_name', 'email', 'phone', 'status', 'deal_lost_reason']:
         if field in data:
             setattr(contact, field, data[field])
+
+    tp1_date = data.get('tp1_date', '')
+    if tp1_date:
+        contact.touchpoint_1 = tp1_date
     contact.save()
+
+    # Auto-calc TP2-TP10 if TP1 date was provided
+    if tp1_date:
+        _auto_calc_tp_dates(contact, tp1_date)
+
     return JsonResponse({'ok': True})
 
 

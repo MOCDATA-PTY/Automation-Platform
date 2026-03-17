@@ -783,6 +783,10 @@
                 <input type="text" id="modalPhone">
             </div>
             <div class="modal-field">
+                <label>TP1 Date (auto-calculates TP2-TP10)</label>
+                <input type="date" id="modalTp1Date">
+            </div>
+            <div class="modal-field">
                 <label>Status</label>
                 <select id="modalStatus">
                     <option value="Active">Active</option>
@@ -893,6 +897,12 @@
         return val;
     }
 
+    // Map field names back to column indices for live updates
+    const FIELD_TO_COL = {};
+    for (const [col, fname] of Object.entries(FIELD_MAP)) {
+        FIELD_TO_COL[fname] = parseInt(col);
+    }
+
     function saveCell(rowId, field, value, td) {
         td.classList.add('cell-saving');
         fetch('{% url "useu_update_cell" %}', {
@@ -906,6 +916,20 @@
             if (data.ok) {
                 td.classList.add('cell-saved');
                 setTimeout(() => td.classList.remove('cell-saved'), 600);
+
+                // If TP1 was set, update TP2-TP10 dates in the row
+                if (data.tp_dates && Object.keys(data.tp_dates).length > 0) {
+                    const row = dataById[rowId];
+                    if (row) {
+                        for (const [fname, dateVal] of Object.entries(data.tp_dates)) {
+                            const col = FIELD_TO_COL[fname];
+                            if (col !== undefined) {
+                                row[col] = dateVal;
+                            }
+                        }
+                        renderPage();
+                    }
+                }
             }
         })
         .catch(() => td.classList.remove('cell-saving'));
@@ -1298,6 +1322,7 @@
         document.getElementById('modalContactName').value = '';
         document.getElementById('modalEmail').value = '';
         document.getElementById('modalPhone').value = '';
+        document.getElementById('modalTp1Date').value = '';
         document.getElementById('modalStatus').value = 'Active';
         document.getElementById('modalDealLostReason').value = '';
         document.getElementById('contactModal').classList.add('open');
@@ -1312,6 +1337,14 @@
         document.getElementById('modalContactName').value = row[2] || '';
         document.getElementById('modalEmail').value = row[3] || '';
         document.getElementById('modalPhone').value = row[4] || '';
+        // Convert TP1 date DD-MM-YYYY to YYYY-MM-DD for date input
+        const tp1 = (row[7] || '').trim();
+        if (tp1 && tp1.match(/^\d{2}-\d{2}-\d{4}$/)) {
+            const p = tp1.split('-');
+            document.getElementById('modalTp1Date').value = p[2] + '-' + p[1] + '-' + p[0];
+        } else {
+            document.getElementById('modalTp1Date').value = '';
+        }
         document.getElementById('modalStatus').value = row[5] || 'Active';
         document.getElementById('modalDealLostReason').value = row[27] || '';
         document.getElementById('contactModal').classList.add('open');
@@ -1323,11 +1356,19 @@
 
     window.saveContact = function() {
         const id = document.getElementById('modalContactId').value;
+        // Convert date input YYYY-MM-DD to DD-MM-YYYY
+        const tp1Raw = document.getElementById('modalTp1Date').value;
+        let tp1Display = '';
+        if (tp1Raw) {
+            const p = tp1Raw.split('-');
+            tp1Display = p[2] + '-' + p[1] + '-' + p[0];
+        }
         const payload = {
             org_name: document.getElementById('modalOrgName').value,
             contact_name: document.getElementById('modalContactName').value,
             email: document.getElementById('modalEmail').value,
             phone: document.getElementById('modalPhone').value,
+            tp1_date: tp1Display,
             status: document.getElementById('modalStatus').value,
             deal_lost_reason: document.getElementById('modalDealLostReason').value,
         };
