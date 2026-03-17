@@ -1969,6 +1969,7 @@ def useu_list(request):
         is_sending = (_active_tp == tp_num)
         tp_stats.append({
             'num': tp_num,
+            'total': sent_count + remaining,
             'sent': sent_count,
             'remaining': remaining,
             'undeliverable': undel_count,
