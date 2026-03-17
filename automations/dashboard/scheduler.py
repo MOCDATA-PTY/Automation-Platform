@@ -364,35 +364,41 @@ def run_condor_dor_sync_job():
 
 
 def run_scheduled_touchpoints():
-    """Check if any touchpoints are scheduled for today and send them."""
+    """Check if any touchpoints are due today (per-contact date) and send them.
+
+    For each TP (2-10), finds contacts whose individual touchpoint_N date
+    matches today (DD-MM-YYYY) and whose tp_sent_on is still empty.
+    This means even if a date is changed the day before, it will fire
+    on the correct day.
+    """
     from .models import TouchpointTemplate, USEUContact
-    from . import onedrive_sync
     import subprocess
     import sys as _sys
 
     today = datetime.now(ZoneInfo('Africa/Johannesburg')).date()
-    logger.info(f"Checking scheduled touchpoints for {today}...")
+    today_str = today.strftime('%d-%m-%Y')
+    logger.info(f"Checking scheduled touchpoints for {today_str}...")
 
     for tp_num in range(2, 11):
+        # Check template exists (needed for email content)
         try:
-            template = TouchpointTemplate.objects.get(touchpoint_number=tp_num)
+            TouchpointTemplate.objects.get(touchpoint_number=tp_num)
         except TouchpointTemplate.DoesNotExist:
             continue
 
-        if not template.scheduled_date or template.scheduled_date != today:
-            continue
-
+        tp_field = f'touchpoint_{tp_num}'
         tp_sent_field = f'tp{tp_num}_sent_on'
+
+        # Find contacts whose individual TP date is today and not yet sent
         eligible = USEUContact.objects.filter(
             status='Active',
-            **{tp_sent_field: ''}
+            **{tp_field: today_str, tp_sent_field: ''}
         ).exclude(email='').exclude(email__isnull=True).count()
 
         if eligible == 0:
-            logger.info(f"TP{tp_num} scheduled for today but no eligible contacts")
             continue
 
-        logger.info(f"TP{tp_num} scheduled for today - {eligible} eligible contacts, launching send...")
+        logger.info(f"TP{tp_num} due today for {eligible} contacts, launching send...")
 
         job_id = f'tp{tp_num}_auto_{int(datetime.now().timestamp())}'
 
@@ -421,6 +427,90 @@ def run_scheduled_touchpoints():
         except Exception as e:
             logger.error(f"Failed to launch TP{tp_num} send: {e}")
             update_sync_health(f'tp{tp_num}_auto', 'error', str(e))
+
+
+def check_bounce_emails():
+    """Check the mailbox for bounce/NDR messages and mark contacts as Undeliverable."""
+    from .models import USEUContact
+    from .views import _get_graph_token, GRAPH_MAILBOX
+    import requests as http_requests
+    import re as _re
+
+    try:
+        token = _get_graph_token()
+        if not token:
+            logger.error("Bounce check: could not get Graph token")
+            return
+
+        # Search for undeliverable/bounce messages in the last 24 hours
+        headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+        # Filter for messages with common bounce subjects
+        url = (
+            f"https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/messages"
+            f"?$filter=isRead eq false and ("
+            f"contains(subject,'Undeliverable') or "
+            f"contains(subject,'Delivery has failed') or "
+            f"contains(subject,'Mail delivery failed') or "
+            f"contains(subject,'Returned mail') or "
+            f"contains(subject,'Non-delivery'))"
+            f"&$top=50&$select=id,subject,body,receivedDateTime"
+        )
+
+        r = http_requests.get(url, headers=headers, timeout=30)
+        if r.status_code != 200:
+            logger.warning(f"Bounce check: HTTP {r.status_code}")
+            return
+
+        messages = r.json().get('value', [])
+        if not messages:
+            return
+
+        logger.info(f"Bounce check: found {len(messages)} bounce messages")
+        marked = 0
+
+        for msg in messages:
+            body_text = msg.get('body', {}).get('content', '')
+            # Extract email addresses from the bounce message
+            emails_found = _re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', body_text)
+
+            for bounced_email in set(emails_found):
+                bounced_email = bounced_email.lower().strip()
+                # Skip our own mailbox and common system addresses
+                if bounced_email in (GRAPH_MAILBOX.lower(), 'postmaster@', 'mailer-daemon@'):
+                    continue
+                if 'microsoft.com' in bounced_email or 'postmaster' in bounced_email:
+                    continue
+
+                # Find and mark matching contacts
+                updated = USEUContact.objects.filter(
+                    email__iexact=bounced_email,
+                    status='Active'
+                ).update(status='Undeliverable')
+
+                if updated:
+                    logger.info(f"Bounce check: marked {bounced_email} as Undeliverable ({updated} contacts)")
+                    marked += updated
+
+            # Mark bounce message as read
+            try:
+                http_requests.patch(
+                    f"https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/messages/{msg['id']}",
+                    headers=headers,
+                    json={'isRead': True},
+                    timeout=10
+                )
+            except Exception:
+                pass
+
+        if marked:
+            update_sync_health('bounce_check', 'success', f'Marked {marked} contacts as Undeliverable')
+            logger.info(f"Bounce check complete: {marked} contacts marked Undeliverable")
+        else:
+            update_sync_health('bounce_check', 'success', f'Checked {len(messages)} bounces, no new contacts affected')
+
+    except Exception as e:
+        logger.error(f"Bounce check error: {e}")
+        update_sync_health('bounce_check', 'error', str(e))
 
 
 def refresh_onedrive_token():
@@ -630,6 +720,15 @@ def start_scheduler():
         trigger=IntervalTrigger(minutes=30),
         id='scheduled_touchpoints',
         name='Check and send scheduled touchpoints',
+        replace_existing=True
+    )
+
+    # Check for bounce/NDR emails every 15 minutes
+    scheduler.add_job(
+        check_bounce_emails,
+        trigger=IntervalTrigger(minutes=15),
+        id='bounce_check',
+        name='Check bounce emails and mark Undeliverable',
         replace_existing=True
     )
 

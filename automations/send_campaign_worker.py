@@ -197,6 +197,8 @@ def run_campaign(tp_num, job_id, job_file):
             print(f"[WORKER] Sending to: {email_addr}", flush=True)
             sent_ok = False
             _status = 0
+            _response_text = ''
+            _is_undeliverable = False
 
             for attempt in range(5):
                 try:
@@ -208,6 +210,7 @@ def run_campaign(tp_num, job_id, job_file):
                         timeout=60
                     )
                     _status = r.status_code
+                    _response_text = r.text[:500] if r.text else ''
                     if _status == 202:
                         sent_ok = True
                         break
@@ -216,7 +219,15 @@ def run_campaign(tp_num, job_id, job_file):
                         print(f"[WORKER] 429 rate limit, waiting {retry_after}s", flush=True)
                         time.sleep(retry_after + attempt * 5)
                     else:
-                        print(f"[WORKER] HTTP {_status} for {email_addr}: {r.text[:200]}", flush=True)
+                        print(f"[WORKER] HTTP {_status} for {email_addr}: {_response_text[:200]}", flush=True)
+                        # Check if this is an undeliverable/invalid recipient error
+                        err_lower = _response_text.lower()
+                        if any(kw in err_lower for kw in [
+                            'invalidrecipients', 'mailboxnotfound', 'recipientnotfound',
+                            'undeliverable', 'does not exist', 'unknown recipient',
+                            'invalid recipient', 'mailbox unavailable', 'user not found',
+                        ]):
+                            _is_undeliverable = True
                         break
                 except Exception as e:
                     print(f"[WORKER] Request error for {email_addr}: {e}", flush=True)
@@ -227,7 +238,15 @@ def run_campaign(tp_num, job_id, job_file):
                 _throttle[0] = max(_throttle[0] * 0.95, 1.5)
 
             with _progress_lock:
-                if sent_ok or _status in [400, 404, 422]:
+                if _is_undeliverable:
+                    # Mark contact as Undeliverable
+                    state['failed'] += 1
+                    contact.status = 'Undeliverable'
+                    setattr(contact, tp_sent_field, now_str)
+                    contact.save(update_fields=['status', tp_sent_field])
+                    print(f"[WORKER] Marked {email_addr} as Undeliverable", flush=True)
+                    update_touchpoint_progress(tp_type, failed=state['failed'])
+                elif sent_ok or _status in [400, 404, 422]:
                     state['sent'] += 1
                     setattr(contact, tp_sent_field, now_str)
                     contact.last_touch = str(tp_num)
