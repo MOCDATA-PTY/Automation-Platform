@@ -784,7 +784,8 @@
             </div>
             <div class="modal-field">
                 <label>TP1 Date (auto-calculates TP2-TP10)</label>
-                <input type="date" id="modalTp1Date">
+                <input type="date" id="modalTp1Date" onchange="validateSendDate(this)">
+                <span id="modalTp1Warn" style="font-size:11px;color:#c0392b;display:none;"></span>
             </div>
             <div class="modal-field">
                 <label>Status</label>
@@ -1288,6 +1289,68 @@
     }
 
     renderPage();
+
+    // ── Send-date validation (no Mon/Fri/weekends/US holidays) ─
+    function getUSHolidays(year) {
+        const holidays = [];
+        // New Year's Day
+        holidays.push(new Date(year, 0, 1).toISOString().slice(0,10));
+        // MLK Day - 3rd Monday of Jan
+        let d = new Date(year, 0, 1); let mon = 0;
+        while (mon < 3) { if (d.getDay() === 1) mon++; if (mon < 3) d.setDate(d.getDate() + 1); }
+        holidays.push(d.toISOString().slice(0,10));
+        // Presidents Day - 3rd Monday of Feb
+        d = new Date(year, 1, 1); mon = 0;
+        while (mon < 3) { if (d.getDay() === 1) mon++; if (mon < 3) d.setDate(d.getDate() + 1); }
+        holidays.push(d.toISOString().slice(0,10));
+        // Memorial Day - last Monday of May
+        d = new Date(year, 4, 31);
+        while (d.getDay() !== 1) d.setDate(d.getDate() - 1);
+        holidays.push(d.toISOString().slice(0,10));
+        // Juneteenth
+        holidays.push(new Date(year, 5, 19).toISOString().slice(0,10));
+        // Independence Day
+        holidays.push(new Date(year, 6, 4).toISOString().slice(0,10));
+        // Labor Day - 1st Monday of Sep
+        d = new Date(year, 8, 1);
+        while (d.getDay() !== 1) d.setDate(d.getDate() + 1);
+        holidays.push(d.toISOString().slice(0,10));
+        // Columbus Day - 2nd Monday of Oct
+        d = new Date(year, 9, 1); mon = 0;
+        while (mon < 2) { if (d.getDay() === 1) mon++; if (mon < 2) d.setDate(d.getDate() + 1); }
+        holidays.push(d.toISOString().slice(0,10));
+        // Veterans Day
+        holidays.push(new Date(year, 10, 11).toISOString().slice(0,10));
+        // Thanksgiving - 4th Thursday of Nov
+        d = new Date(year, 10, 1); let thu = 0;
+        while (thu < 4) { if (d.getDay() === 4) thu++; if (thu < 4) d.setDate(d.getDate() + 1); }
+        holidays.push(d.toISOString().slice(0,10));
+        // Christmas
+        holidays.push(new Date(year, 11, 25).toISOString().slice(0,10));
+        return holidays;
+    }
+
+    function isBlockedDate(dateStr) {
+        if (!dateStr) return false;
+        const d = new Date(dateStr + 'T00:00:00');
+        const day = d.getDay(); // 0=Sun,1=Mon,...,5=Fri,6=Sat
+        if (day === 0 || day === 1 || day === 5 || day === 6) return 'No sends on ' + ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][day];
+        const holidays = getUSHolidays(d.getFullYear());
+        if (holidays.includes(dateStr)) return 'This is a US public holiday';
+        return false;
+    }
+
+    window.validateSendDate = function(input) {
+        const warn = document.getElementById('modalTp1Warn');
+        const reason = isBlockedDate(input.value);
+        if (reason) {
+            warn.textContent = reason + ' — emails only go out Tue/Wed/Thu, non-holidays';
+            warn.style.display = 'block';
+            input.value = '';
+        } else {
+            warn.style.display = 'none';
+        }
+    };
 
     // ── Context Menu ───────────────────────────────────────────
     const ctxMenu = document.getElementById('ctxMenu');
