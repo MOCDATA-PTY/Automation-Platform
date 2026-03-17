@@ -1289,7 +1289,7 @@
                 btn.disabled = false;
                 btn.textContent = 'Send All';
                 document.getElementById('stopSendBtn').style.display = 'none';
-                document.getElementById('progressPanel').style.display = 'none';
+                const _pp = document.getElementById('progressPanel'); if(_pp) _pp.style.display = 'none';
                 return;
             }
             sendJobId = data.job_id;
@@ -1362,9 +1362,9 @@
                 document.getElementById('sendAllBtn').textContent = 'Send All';
                 document.getElementById('stopSendBtn').style.display = 'none';
                 if (data.stopped) {
-                    document.getElementById('progCurrent').textContent = 'Stopped. Sent ' + data.sent + ' of ' + data.total + '.';
+                    const _pc = document.getElementById('progCurrent'); if(_pc) _pc.textContent = 'Stopped. Sent ' + data.sent + ' of ' + data.total + '.';
                 } else {
-                    document.getElementById('progCurrent').textContent = 'Complete! Sent ' + data.sent + ' of ' + data.total + '.';
+                    const _pc = document.getElementById('progCurrent'); if(_pc) _pc.textContent = 'Complete! Sent ' + data.sent + ' of ' + data.total + '.';
                 }
                 sendJobId = null;
                 updateEligibleCount();
@@ -1412,7 +1412,7 @@
                 btn.style.display = 'none';
                 btn.disabled = false;
                 btn.textContent = 'Stop Sending';
-                document.getElementById('progCurrent').textContent = 'Stopped.';
+                const _pc = document.getElementById('progCurrent'); if(_pc) _pc.textContent = 'Stopped.';
                 updateEligibleCount();
             } else {
                 console.error('[STOP] Stop failed:', data.error);
