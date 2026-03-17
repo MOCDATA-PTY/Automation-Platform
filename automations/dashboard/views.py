@@ -1963,7 +1963,8 @@ def useu_update_cell(request):
         return JsonResponse({'ok': False, 'error': 'Invalid data'}, status=400)
 
     allowed_fields = [
-        'email', 'status', 'last_touch',
+        'org_name', 'contact_name', 'email', 'phone',
+        'status', 'last_touch',
         'touchpoint_1', 'tp1_sent_on', 'touchpoint_2', 'tp2_sent_on',
         'touchpoint_3', 'tp3_sent_on', 'touchpoint_4', 'tp4_sent_on',
         'touchpoint_5', 'tp5_sent_on', 'touchpoint_6', 'tp6_sent_on',

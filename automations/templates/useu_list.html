@@ -520,8 +520,33 @@
     color: var(--text-secondary, #797775);
 }
 .row-action-btn:hover { background: var(--surface2, #f0f0f0); }
-.row-action-btn.delete-btn { color: #c0392b; border-color: #f5c6cb; }
-.row-action-btn.delete-btn:hover { background: #fdecea; }
+/* Context menu */
+.ctx-menu {
+    display: none;
+    position: absolute;
+    z-index: 2000;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #edebe9);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    min-width: 160px;
+    padding: 4px 0;
+}
+.ctx-menu.open { display: block; }
+.ctx-menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    text-align: left;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--text-primary, #1b1a19);
+}
+.ctx-menu-item:hover { background: var(--surface2, #f3f2f1); }
+.ctx-menu-item.danger { color: #c0392b; }
+.ctx-menu-item.danger:hover { background: #fdecea; }
 {% endblock %}
 
 {% block content %}
@@ -639,7 +664,6 @@
                     <th data-col="25" class="tp-header">TP10 <span class="sort-arrow">&#9650;</span></th>
                     <th data-col="26" class="tp-header">TP10 Sent <span class="sort-arrow">&#9650;</span></th>
                     <th data-col="27">Deal Lost Reason <span class="sort-arrow">&#9650;</span></th>
-                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="tableBody"></tbody>
@@ -658,6 +682,12 @@
         </div>
         <div class="pagination-buttons" id="pagBtns"></div>
     </div>
+</div>
+
+<!-- Right-click context menu -->
+<div class="ctx-menu" id="ctxMenu">
+    <button class="ctx-menu-item" id="ctxEdit">Edit Contact</button>
+    <button class="ctx-menu-item danger" id="ctxDelete">Delete Contact</button>
 </div>
 
 <!-- Add/Edit Contact Modal -->
@@ -729,7 +759,8 @@
 
     // Map column index -> DB field name for editable cells
     const FIELD_MAP = {
-        3: 'email', 5: 'status', 6: 'last_touch',
+        1: 'org_name', 2: 'contact_name', 3: 'email', 4: 'phone',
+        5: 'status', 6: 'last_touch',
         7: 'touchpoint_1', 8: 'tp1_sent_on',
         9: 'touchpoint_2', 10: 'tp2_sent_on',
         11: 'touchpoint_3', 12: 'tp3_sent_on',
@@ -744,7 +775,8 @@
     };
     const DATE_COLS = [8, 10, 12, 14, 16, 18, 20, 22, 24, 26];
     const TP_STATUS_COLS = [7, 9, 11, 13, 15, 17, 19, 21, 23, 25];
-    const EDITABLE_COLS = [3, 5, 6, ...TP_STATUS_COLS, ...DATE_COLS, 27];
+    const DBLCLICK_COLS = [1, 2, 4];
+    const EDITABLE_COLS = [1, 2, 3, 4, 5, 6, ...TP_STATUS_COLS, ...DATE_COLS, 27];
     const TOTAL_COLS = 27; // columns 1 through 27
 
     // Build a lookup by contact ID for live updates
@@ -834,6 +866,28 @@
         });
     }
 
+    function makeEditableDblClick(td, row, col) {
+        td.addEventListener('dblclick', function(e) {
+            if (td.querySelector('input')) return;
+            const current = row[col] || '';
+            td.innerHTML = '<input type="text" value="' + current.replace(/"/g, '&quot;') + '">';
+            const input = td.querySelector('input');
+            input.focus();
+            input.select();
+            function commit() {
+                const newVal = input.value.trim();
+                row[col] = newVal;
+                td.textContent = newVal;
+                saveCell(row[0], FIELD_MAP[col], newVal, td);
+            }
+            input.addEventListener('blur', commit);
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+                if (e.key === 'Escape') { td.textContent = row[col] || ''; }
+            });
+        });
+    }
+
     function makeEditableDate(td, row, col) {
         td.addEventListener('click', function(e) {
             if (td.querySelector('input')) return;
@@ -894,7 +948,11 @@
             for (let c = 1; c <= TOTAL_COLS; c++) {
                 const td = document.createElement('td');
 
-                if (c === 5) {
+                if (DBLCLICK_COLS.includes(c)) {
+                    td.className = 'editable-cell';
+                    td.textContent = r[c] || '';
+                    makeEditableDblClick(td, r, c);
+                } else if (c === 5) {
                     td.className = 'editable-cell';
                     td.innerHTML = statusBadge(r[c]);
                     makeEditableStatus(td, r, c);
@@ -919,13 +977,11 @@
                 tr.appendChild(td);
             }
 
-            // Actions column
-            const actionTd = document.createElement('td');
-            actionTd.innerHTML = '<div class="row-actions">' +
-                '<button class="row-action-btn" onclick="openEditModal(' + r[0] + ')">Edit</button>' +
-                '<button class="row-action-btn delete-btn" onclick="deleteContact(' + r[0] + ')">Del</button>' +
-                '</div>';
-            tr.appendChild(actionTd);
+            // Right-click context menu
+            tr.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                showContextMenu(e.pageX, e.pageY, r[0]);
+            });
 
             tbody.appendChild(tr);
         }
@@ -1141,6 +1197,31 @@
     }
 
     renderPage();
+
+    // ── Context Menu ───────────────────────────────────────────
+    const ctxMenu = document.getElementById('ctxMenu');
+    let ctxContactId = null;
+
+    window.showContextMenu = function(x, y, contactId) {
+        ctxContactId = contactId;
+        ctxMenu.style.left = x + 'px';
+        ctxMenu.style.top = y + 'px';
+        ctxMenu.classList.add('open');
+    };
+
+    document.addEventListener('click', function() {
+        ctxMenu.classList.remove('open');
+    });
+
+    document.getElementById('ctxEdit').addEventListener('click', function() {
+        ctxMenu.classList.remove('open');
+        if (ctxContactId) openEditModal(ctxContactId);
+    });
+
+    document.getElementById('ctxDelete').addEventListener('click', function() {
+        ctxMenu.classList.remove('open');
+        if (ctxContactId) deleteContact(ctxContactId);
+    });
 
     // ── Add / Edit / Delete Contacts ────────────────────────────
     window.openAddModal = function() {
