@@ -1983,6 +1983,60 @@ def useu_update_cell(request):
         return JsonResponse({'ok': False, 'error': 'Not found'}, status=404)
 
 
+@login_required
+@require_http_methods(["POST"])
+def useu_create_contact(request):
+    """Create a new USEU contact."""
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON'}, status=400)
+
+    contact = USEUContact(
+        org_name=data.get('org_name', ''),
+        contact_name=data.get('contact_name', ''),
+        email=data.get('email', ''),
+        phone=data.get('phone', ''),
+        status=data.get('status', 'Active'),
+        deal_lost_reason=data.get('deal_lost_reason', ''),
+    )
+    contact.save()
+    return JsonResponse({'ok': True, 'id': contact.id})
+
+
+@login_required
+@require_http_methods(["POST"])
+def useu_edit_contact(request, contact_id):
+    """Edit an existing USEU contact."""
+    try:
+        contact = USEUContact.objects.get(id=contact_id)
+    except USEUContact.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'Not found'}, status=404)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON'}, status=400)
+
+    for field in ['org_name', 'contact_name', 'email', 'phone', 'status', 'deal_lost_reason']:
+        if field in data:
+            setattr(contact, field, data[field])
+    contact.save()
+    return JsonResponse({'ok': True})
+
+
+@login_required
+@require_http_methods(["POST"])
+def useu_delete_contact(request, contact_id):
+    """Delete a USEU contact."""
+    try:
+        contact = USEUContact.objects.get(id=contact_id)
+        contact.delete()
+        return JsonResponse({'ok': True})
+    except USEUContact.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'Not found'}, status=404)
+
+
 # ── Send All Touchpoint ────────────────────────────────────────────────────────
 
 _send_all_progress = {}  # in-memory progress tracker

@@ -433,6 +433,95 @@
 .page-nav-tab:hover { color: var(--text-primary); }
 .page-nav-tab.active { color: #054B70; border-bottom-color: #054B70; }
 [data-theme="dark"] .page-nav-tab.active { color: #6cb4d8; border-bottom-color: #6cb4d8; }
+
+/* Contact Modal */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+    background: var(--surface, #fff);
+    border-radius: 10px;
+    width: 480px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border, #edebe9);
+}
+.modal-header h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary, #1b1a19); }
+.modal-close {
+    background: none; border: none; font-size: 20px; cursor: pointer;
+    color: var(--text-secondary, #797775); padding: 0; line-height: 1;
+}
+.modal-body { padding: 20px 24px; }
+.modal-field { margin-bottom: 14px; }
+.modal-field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary, #797775);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.modal-field input, .modal-field select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border, #edebe9);
+    border-radius: 6px;
+    font-size: 14px;
+    background: var(--surface2, #f8f8f8);
+    color: var(--text-primary, #1b1a19);
+    box-sizing: border-box;
+}
+.modal-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding: 14px 24px;
+    border-top: 1px solid var(--border, #edebe9);
+}
+.modal-btn {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.modal-btn-primary { background: #054B70; color: #fff; }
+.modal-btn-primary:hover { background: #043d5c; }
+.modal-btn-cancel { background: var(--surface2, #f0f0f0); color: var(--text-primary, #333); }
+.modal-btn-danger { background: #c0392b; color: #fff; }
+.modal-btn-danger:hover { background: #a5281b; }
+
+/* Row action buttons */
+.row-actions { display: flex; gap: 4px; white-space: nowrap; }
+.row-action-btn {
+    background: none;
+    border: 1px solid var(--border, #edebe9);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--text-secondary, #797775);
+}
+.row-action-btn:hover { background: var(--surface2, #f0f0f0); }
+.row-action-btn.delete-btn { color: #c0392b; border-color: #f5c6cb; }
+.row-action-btn.delete-btn:hover { background: #fdecea; }
 {% endblock %}
 
 {% block content %}
@@ -514,7 +603,10 @@
 
     <div class="list-card-header">
         <div class="list-card-title">Contacts</div>
-        <input type="text" class="search-box" id="searchBox" placeholder="Search by name, email, org...">
+        <div style="display:flex;gap:10px;align-items:center;flex:1;justify-content:flex-end;">
+            <input type="text" class="search-box" id="searchBox" placeholder="Search by name, email, org..." style="flex:0 1 300px;">
+            <button class="modal-btn modal-btn-primary" onclick="openAddModal()" style="white-space:nowrap;">+ Add Contact</button>
+        </div>
     </div>
     <div class="table-wrap">
         <table class="list-table" id="listTable">
@@ -547,6 +639,7 @@
                     <th data-col="25" class="tp-header">TP10 <span class="sort-arrow">&#9650;</span></th>
                     <th data-col="26" class="tp-header">TP10 Sent <span class="sort-arrow">&#9650;</span></th>
                     <th data-col="27">Deal Lost Reason <span class="sort-arrow">&#9650;</span></th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="tableBody"></tbody>
@@ -566,6 +659,53 @@
         <div class="pagination-buttons" id="pagBtns"></div>
     </div>
 </div>
+
+<!-- Add/Edit Contact Modal -->
+<div class="modal-overlay" id="contactModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3 id="modalTitle">Add Contact</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="modalContactId">
+            <div class="modal-field">
+                <label>Organization Name</label>
+                <input type="text" id="modalOrgName">
+            </div>
+            <div class="modal-field">
+                <label>Contact Name</label>
+                <input type="text" id="modalContactName">
+            </div>
+            <div class="modal-field">
+                <label>Email</label>
+                <input type="email" id="modalEmail">
+            </div>
+            <div class="modal-field">
+                <label>Phone</label>
+                <input type="text" id="modalPhone">
+            </div>
+            <div class="modal-field">
+                <label>Status</label>
+                <select id="modalStatus">
+                    <option value="Active">Active</option>
+                    <option value="Undeliverable">Undeliverable</option>
+                    <option value="Lost">Lost</option>
+                    <option value="Move to HubSpot">Move to HubSpot</option>
+                </select>
+            </div>
+            <div class="modal-field">
+                <label>Deal Lost Reason</label>
+                <input type="text" id="modalDealLostReason">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Cancel</button>
+            <button class="modal-btn modal-btn-primary" id="modalSaveBtn" onclick="saveContact()">Save</button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -778,6 +918,15 @@
 
                 tr.appendChild(td);
             }
+
+            // Actions column
+            const actionTd = document.createElement('td');
+            actionTd.innerHTML = '<div class="row-actions">' +
+                '<button class="row-action-btn" onclick="openEditModal(' + r[0] + ')">Edit</button>' +
+                '<button class="row-action-btn delete-btn" onclick="deleteContact(' + r[0] + ')">Del</button>' +
+                '</div>';
+            tr.appendChild(actionTd);
+
             tbody.appendChild(tr);
         }
 
@@ -992,6 +1141,83 @@
     }
 
     renderPage();
+
+    // ── Add / Edit / Delete Contacts ────────────────────────────
+    window.openAddModal = function() {
+        document.getElementById('modalTitle').textContent = 'Add Contact';
+        document.getElementById('modalContactId').value = '';
+        document.getElementById('modalOrgName').value = '';
+        document.getElementById('modalContactName').value = '';
+        document.getElementById('modalEmail').value = '';
+        document.getElementById('modalPhone').value = '';
+        document.getElementById('modalStatus').value = 'Active';
+        document.getElementById('modalDealLostReason').value = '';
+        document.getElementById('contactModal').classList.add('open');
+    };
+
+    window.openEditModal = function(contactId) {
+        const row = dataById[contactId];
+        if (!row) return;
+        document.getElementById('modalTitle').textContent = 'Edit Contact';
+        document.getElementById('modalContactId').value = contactId;
+        document.getElementById('modalOrgName').value = row[1] || '';
+        document.getElementById('modalContactName').value = row[2] || '';
+        document.getElementById('modalEmail').value = row[3] || '';
+        document.getElementById('modalPhone').value = row[4] || '';
+        document.getElementById('modalStatus').value = row[5] || 'Active';
+        document.getElementById('modalDealLostReason').value = row[27] || '';
+        document.getElementById('contactModal').classList.add('open');
+    };
+
+    window.closeModal = function() {
+        document.getElementById('contactModal').classList.remove('open');
+    };
+
+    window.saveContact = function() {
+        const id = document.getElementById('modalContactId').value;
+        const payload = {
+            org_name: document.getElementById('modalOrgName').value,
+            contact_name: document.getElementById('modalContactName').value,
+            email: document.getElementById('modalEmail').value,
+            phone: document.getElementById('modalPhone').value,
+            status: document.getElementById('modalStatus').value,
+            deal_lost_reason: document.getElementById('modalDealLostReason').value,
+        };
+
+        const url = id ? '/useu-list/' + id + '/edit/' : '/useu-list/add/';
+        fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify(payload)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                closeModal();
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Unknown'));
+            }
+        })
+        .catch(() => alert('Network error'));
+    };
+
+    window.deleteContact = function(contactId) {
+        if (!confirm('Delete this contact? This cannot be undone.')) return;
+        fetch('/useu-list/' + contactId + '/delete/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Unknown'));
+            }
+        })
+        .catch(() => alert('Network error'));
+    };
 
     // ── Schedule Touchpoints ─────────────────────────────────────
     window.toggleSchedule = function() {
