@@ -1936,21 +1936,44 @@ def useu_list(request):
             'per_page': per_page,
         })
 
-    # TP stats: sent count, remaining, last sent date for each TP
+    # TP stats: sent count, remaining, undeliverable, last sent date for each TP
     tp_stats = []
     active_with_email = contacts.filter(status='Active').exclude(email='').exclude(email__isnull=True)
+    undeliverable_contacts = contacts.filter(status='Undeliverable')
+
+    # Check if any send job is currently running
+    _active_tp = None
+    for _jf in os.listdir(os.path.dirname(__file__) + '/..'):
+        if _jf.startswith('send_job_') and _jf.endswith('.json'):
+            try:
+                with open(os.path.join(os.path.dirname(__file__), '..', _jf)) as _f:
+                    _jdata = json.load(_f)
+                    if not _jdata.get('done', True):
+                        # Extract tp num from filename like send_job_tp1_xxx.json
+                        _tp_match = re.search(r'tp(\d+)', _jf)
+                        if _tp_match:
+                            _active_tp = int(_tp_match.group(1))
+            except Exception:
+                pass
+
     for tp_num in range(1, 11):
         sent_field = f'tp{tp_num}_sent_on'
         sent_qs = active_with_email.exclude(**{sent_field: ''})
         sent_count = sent_qs.count()
         remaining = active_with_email.filter(**{sent_field: ''}).count()
+        # Count undeliverable contacts that have this TP sent
+        undel_count = undeliverable_contacts.exclude(**{sent_field: ''}).count()
         # Get the most recent sent date
         last_sent = sent_qs.order_by(f'-{sent_field}').values_list(sent_field, flat=True).first() or ''
+        # Is this TP currently sending?
+        is_sending = (_active_tp == tp_num)
         tp_stats.append({
             'num': tp_num,
             'sent': sent_count,
             'remaining': remaining,
+            'undeliverable': undel_count,
             'last_sent': last_sent,
+            'is_sending': is_sending,
         })
 
     profile, _ = UserProfile.objects.get_or_create(user=request.user)

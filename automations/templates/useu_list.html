@@ -566,7 +566,8 @@
     border-radius: 10px;
 }
 .tp-stat-card-badge.done { background: #e6f4ea; color: #1e7e34; }
-.tp-stat-card-badge.pending { background: #fff3cd; color: #856404; }
+.tp-stat-card-badge.sending { background: #e8f0fe; color: #1a56db; animation: pulse-badge 1.5s infinite; }
+@keyframes pulse-badge { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 .tp-stat-card-badge.none { background: var(--surface2, #f3f2f1); color: var(--text-secondary, #797775); }
 .tp-stat-row {
     display: flex;
@@ -676,16 +677,21 @@
     <div class="tp-stat-card">
         <div class="tp-stat-card-header">
             <span class="tp-stat-card-title">TP {{ tp.num }}</span>
-            {% if tp.sent > 0 and tp.remaining == 0 %}
+            {% if tp.is_sending %}
+            <span class="tp-stat-card-badge sending">Sending...</span>
+            {% elif tp.sent > 0 and tp.remaining == 0 %}
             <span class="tp-stat-card-badge done">Complete</span>
             {% elif tp.sent > 0 %}
-            <span class="tp-stat-card-badge pending">In Progress</span>
+            <span class="tp-stat-card-badge done">Sent</span>
             {% else %}
             <span class="tp-stat-card-badge none">Not Started</span>
             {% endif %}
         </div>
         <div class="tp-stat-row"><span>Sent</span><span>{{ tp.sent }}</span></div>
         <div class="tp-stat-row"><span>Remaining</span><span>{{ tp.remaining }}</span></div>
+        {% if tp.undeliverable > 0 %}
+        <div class="tp-stat-row"><span>Undeliverable</span><span style="color:#c0392b;">{{ tp.undeliverable }}</span></div>
+        {% endif %}
         {% if tp.last_sent %}
         <div class="tp-stat-row"><span>Last sent</span><span>{{ tp.last_sent }}</span></div>
         {% endif %}
