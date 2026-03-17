@@ -290,6 +290,59 @@
 }
 .send-all-btn:hover { background: #043d5c; }
 .send-all-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Schedule Touchpoints */
+.tp-schedule-bar {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+.tp-schedule-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    user-select: none;
+}
+.tp-schedule-toggle .arrow { transition: transform 0.2s; font-size: 10px; }
+.tp-schedule-toggle .arrow.open { transform: rotate(90deg); }
+.tp-schedule-grid {
+    display: none;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+.tp-schedule-grid.open { display: grid; }
+.tp-schedule-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.tp-schedule-item label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.tp-schedule-item input[type="date"] {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--surface2);
+    color: var(--text-primary);
+}
+.tp-schedule-item .schedule-status {
+    font-size: 11px;
+    color: #1e7e34;
+    min-height: 16px;
+}
+.tp-schedule-item .schedule-status.pending { color: var(--text-secondary); }
+
 .send-progress-panel {
     display: none;
     padding: 14px 20px;
@@ -406,6 +459,28 @@
         <span class="eligible-count" id="eligibleCount"></span>
     </div>
     
+    <!-- Schedule Touchpoints -->
+    <div class="tp-schedule-bar">
+        <div class="tp-schedule-toggle" onclick="toggleSchedule()">
+            <span class="arrow" id="scheduleArrow">&#9654;</span>
+            Schedule Touchpoint Dates (applies to all contacts)
+        </div>
+        <div class="tp-schedule-grid" id="scheduleGrid">
+            {% for tp_num in "23456789" %}
+            <div class="tp-schedule-item">
+                <label>Touchpoint {{ tp_num }}</label>
+                <input type="date" id="schedDate{{ tp_num }}" onchange="setSchedule({{ tp_num }}, this.value)">
+                <span class="schedule-status pending" id="schedStatus{{ tp_num }}"></span>
+            </div>
+            {% endfor %}
+            <div class="tp-schedule-item">
+                <label>Touchpoint 10</label>
+                <input type="date" id="schedDate10" onchange="setSchedule(10, this.value)">
+                <span class="schedule-status pending" id="schedStatus10"></span>
+            </div>
+        </div>
+    </div>
+
     <!-- Persistent Progress Status -->
     <div class="tp-status" style="margin: 10px 0; padding: 10px; background: var(--surface2); border-radius: 4px; font-size: 13px; display: none;"></div>
 
@@ -884,6 +959,70 @@
     }
 
     renderPage();
+
+    // ── Schedule Touchpoints ─────────────────────────────────────
+    window.toggleSchedule = function() {
+        const grid = document.getElementById('scheduleGrid');
+        const arrow = document.getElementById('scheduleArrow');
+        grid.classList.toggle('open');
+        arrow.classList.toggle('open');
+    };
+
+    window.setSchedule = function(tpNum, dateStr) {
+        const status = document.getElementById('schedStatus' + tpNum);
+        status.textContent = 'Saving...';
+        status.className = 'schedule-status pending';
+
+        fetch('{% url "set_touchpoint_schedule" %}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({touchpoint_number: tpNum, scheduled_date: dateStr})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                if (dateStr) {
+                    status.textContent = 'Set for ' + data.date + ' (' + data.updated + ' contacts updated)';
+                    status.className = 'schedule-status';
+                } else {
+                    status.textContent = 'Cleared';
+                    status.className = 'schedule-status pending';
+                }
+            } else {
+                status.textContent = 'Error: ' + (data.error || 'Unknown');
+                status.className = 'schedule-status pending';
+            }
+        })
+        .catch(() => {
+            status.textContent = 'Network error';
+            status.className = 'schedule-status pending';
+        });
+    };
+
+    // Load existing schedules on page load
+    fetch('{% url "get_touchpoint_schedules" %}')
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok && data.schedules) {
+            for (const [tp, dateVal] of Object.entries(data.schedules)) {
+                const input = document.getElementById('schedDate' + tp);
+                const status = document.getElementById('schedStatus' + tp);
+                if (input && dateVal) {
+                    // dateVal could be YYYY-MM-DD or DD-MM-YYYY
+                    if (dateVal.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                        input.value = dateVal;
+                    } else if (dateVal.match(/^\d{2}-\d{2}-\d{4}$/)) {
+                        const parts = dateVal.split('-');
+                        input.value = parts[2] + '-' + parts[1] + '-' + parts[0];
+                    }
+                    if (status) {
+                        status.textContent = 'Scheduled: ' + dateVal;
+                        status.className = 'schedule-status';
+                    }
+                }
+            }
+        }
+    });
 })();
 </script>
 {% endblock %}
