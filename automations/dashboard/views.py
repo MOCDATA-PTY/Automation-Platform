@@ -2090,12 +2090,12 @@ def _us_holidays(year):
 
 
 def _next_valid_send_date(start_date):
-    """Given a date, return the next valid send date (Tue/Wed/Thu, not a US holiday)."""
+    """Given a date, return the next valid send date (not Mon/Fri, not a US holiday)."""
     d = start_date
     holidays = _us_holidays(d.year) | _us_holidays(d.year + 1)
     for _ in range(30):  # safety limit
-        # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
-        if d.weekday() in (1, 2, 3) and d not in holidays:
+        # 0=Mon, 4=Fri — skip these
+        if d.weekday() not in (0, 4) and d not in holidays:
             return d
         d += timedelta(days=1)
     return d

@@ -379,9 +379,9 @@ def run_scheduled_touchpoints():
     today_str = today.strftime('%d-%m-%Y')
     logger.info(f"Checking scheduled touchpoints for {today_str}...")
 
-    # Don't send on Monday (0), Friday (4), Saturday (5), Sunday (6)
-    if today.weekday() in (0, 4, 5, 6):
-        logger.info(f"Skipping touchpoint sends — today is {today.strftime('%A')} (no sends on Mon/Fri/weekends)")
+    # Don't send on Monday (0) or Friday (4)
+    if today.weekday() in (0, 4):
+        logger.info(f"Skipping touchpoint sends — today is {today.strftime('%A')} (no sends on Mon/Fri)")
         return
 
     # Don't send on US public holidays
