@@ -728,6 +728,9 @@
         <button class="send-all-btn" id="sendAllBtn" onclick="startSendAll()">Send All</button>
         <button class="send-all-btn" id="stopSendBtn" onclick="stopSending()" style="display:none;background:#dc3545;">Stop Sending</button>
         <span class="eligible-count" id="eligibleCount"></span>
+        <div id="progressPanel" style="display:none;margin-left:12px;font-size:13px;color:var(--text-secondary);">
+            <span id="progCurrent"></span>
+        </div>
     </div>
     
     <!-- Schedule Touchpoints -->
@@ -1268,6 +1271,8 @@
         btn.disabled = true;
         btn.textContent = 'Sending...';
         document.getElementById('stopSendBtn').style.display = 'inline-block';
+        document.getElementById('progressPanel').style.display = 'inline-block';
+        document.getElementById('progCurrent').textContent = 'Starting...';
         console.log('[SEND] UI set to Sending. Posting to server...');
 
         // Update data-tp-type when touchpoint changes
@@ -1370,6 +1375,14 @@
                 updateEligibleCount();
             } else {
                 console.log('[POLL] Not done yet. sent:', data.sent, '/', data.total, 'current:', data.current);
+                const progEl = document.getElementById('progCurrent');
+                if (progEl) {
+                    if (data.current) {
+                        progEl.textContent = 'Sent ' + data.sent + ' of ' + data.total + ' — ' + data.current;
+                    } else {
+                        progEl.textContent = 'Sent ' + data.sent + ' of ' + data.total + '...';
+                    }
+                }
                 setTimeout(pollProgress, 1000);
             }
         })
@@ -1412,7 +1425,7 @@
                 btn.style.display = 'none';
                 btn.disabled = false;
                 btn.textContent = 'Stop Sending';
-                const _pc = document.getElementById('progCurrent'); if(_pc) _pc.textContent = 'Stopped.';
+                const _pc3 = document.getElementById('progCurrent'); if(_pc3) _pc3.textContent = 'Stopped.';
                 updateEligibleCount();
             } else {
                 console.error('[STOP] Stop failed:', data.error);
