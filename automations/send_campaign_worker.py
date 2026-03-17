@@ -249,6 +249,15 @@ def run_campaign(tp_num, job_id, job_file):
                         retry_after = int(r.headers.get('Retry-After', 10))
                         print(f"[WORKER] 429 rate limit, waiting {retry_after}s", flush=True)
                         time.sleep(retry_after + attempt * 5)
+                    elif _status == 403:
+                        err_lower = _response_text.lower()
+                        if 'quotaexceeded' in err_lower or 'cannot submit' in err_lower:
+                            print(f"[WORKER] QUOTA EXCEEDED — Microsoft blocked sending. Stopping campaign.", flush=True)
+                            _stopped['value'] = True
+                            return
+                        else:
+                            print(f"[WORKER] HTTP 403 for {email_addr}: {_response_text[:200]}", flush=True)
+                            break
                     else:
                         print(f"[WORKER] HTTP {_status} for {email_addr}: {_response_text[:200]}", flush=True)
                         # Check if this is an undeliverable/invalid recipient error
@@ -276,7 +285,7 @@ def run_campaign(tp_num, job_id, job_file):
                     contact.save(update_fields=['status', tp_sent_field])
                     print(f"[WORKER] Marked {email_addr} as Undeliverable", flush=True)
                     update_touchpoint_progress(tp_type, failed=state['failed'])
-                elif sent_ok or _status in [400, 404, 422]:
+                elif sent_ok:
                     state['sent'] += 1
                     setattr(contact, tp_sent_field, now_str)
                     contact.last_touch = str(tp_num)
@@ -284,6 +293,7 @@ def run_campaign(tp_num, job_id, job_file):
                     update_touchpoint_progress(tp_type, sent=state['sent'])
                 else:
                     state['failed'] += 1
+                    print(f"[WORKER] FAILED {email_addr} (HTTP {_status})", flush=True)
                     update_touchpoint_progress(tp_type, failed=state['failed'])
 
         except Exception as e:

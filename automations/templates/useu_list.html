@@ -1389,13 +1389,24 @@
         .catch(err => { console.error('[POLL] Error:', err); setTimeout(pollProgress, 2000); });
     }
 
+    function resetSendUI(message) {
+        sendJobId = null;
+        const sendBtn = document.getElementById('sendAllBtn');
+        const stopBtn = document.getElementById('stopSendBtn');
+        const progPanel = document.getElementById('progressPanel');
+        const progCur = document.getElementById('progCurrent');
+        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send All'; }
+        if (stopBtn) { stopBtn.style.display = 'none'; stopBtn.disabled = false; stopBtn.textContent = 'Stop Sending'; }
+        if (progCur && message) { progCur.textContent = message; }
+        if (progPanel && message) { progPanel.style.display = 'inline-block'; }
+        updateEligibleCount();
+    }
+
     window.stopSending = function() {
         console.log('[STOP] stopSending called. sendJobId:', sendJobId);
         if (!sendJobId) {
             console.warn('[STOP] No sendJobId — cannot stop. Resetting UI anyway.');
-            document.getElementById('sendAllBtn').disabled = false;
-            document.getElementById('sendAllBtn').textContent = 'Send All';
-            document.getElementById('stopSendBtn').style.display = 'none';
+            resetSendUI('');
             return;
         }
         if (!confirm('Stop sending? Emails already sent will not be undone.')) return;
@@ -1417,16 +1428,8 @@
         .then(data => {
             console.log('[STOP] Server response:', JSON.stringify(data));
             if (data.ok) {
-                // Immediately reset UI - don't wait for worker
                 console.log('[STOP] Stop confirmed. Resetting UI.');
-                sendJobId = null;
-                document.getElementById('sendAllBtn').disabled = false;
-                document.getElementById('sendAllBtn').textContent = 'Send All';
-                btn.style.display = 'none';
-                btn.disabled = false;
-                btn.textContent = 'Stop Sending';
-                const _pc3 = document.getElementById('progCurrent'); if(_pc3) _pc3.textContent = 'Stopped.';
-                updateEligibleCount();
+                resetSendUI('Stopped.');
             } else {
                 console.error('[STOP] Stop failed:', data.error);
                 alert('Error: ' + data.error);
@@ -1436,9 +1439,8 @@
         })
         .catch(err => {
             console.error('[STOP] Fetch error:', err);
-            alert('Error: ' + err.message);
-            btn.disabled = false;
-            btn.textContent = 'Stop Sending';
+            // Reset UI anyway on error - don't leave it stuck
+            resetSendUI('Stopped (connection error).');
         });
     };
 

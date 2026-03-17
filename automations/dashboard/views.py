@@ -2298,10 +2298,12 @@ def send_all_touchpoint(request):
 
     # Launch the worker as a detached subprocess so it survives gunicorn restarts
     _worker = os.path.join(os.path.dirname(__file__), '..', 'send_campaign_worker.py')
+    _log_file = os.path.join(os.path.dirname(__file__), '..', f'worker_{job_id}.log')
+    _log_fh = open(_log_file, 'w')
     subprocess.Popen(
-        [_sys.executable, _worker, '--tp-num', str(tp_num), '--job-id', job_id],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        [_sys.executable, '-u', _worker, '--tp-num', str(tp_num), '--job-id', job_id],
+        stdout=_log_fh,
+        stderr=_log_fh,
         start_new_session=True,  # detach from gunicorn's process group
     )
 
