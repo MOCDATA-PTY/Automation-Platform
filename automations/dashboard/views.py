@@ -1936,6 +1936,23 @@ def useu_list(request):
             'per_page': per_page,
         })
 
+    # TP stats: sent count, remaining, last sent date for each TP
+    tp_stats = []
+    active_with_email = contacts.filter(status='Active').exclude(email='').exclude(email__isnull=True)
+    for tp_num in range(1, 11):
+        sent_field = f'tp{tp_num}_sent_on'
+        sent_qs = active_with_email.exclude(**{sent_field: ''})
+        sent_count = sent_qs.count()
+        remaining = active_with_email.filter(**{sent_field: ''}).count()
+        # Get the most recent sent date
+        last_sent = sent_qs.order_by(f'-{sent_field}').values_list(sent_field, flat=True).first() or ''
+        tp_stats.append({
+            'num': tp_num,
+            'sent': sent_count,
+            'remaining': remaining,
+            'last_sent': last_sent,
+        })
+
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     return render(request, 'useu_list.html', {
         'rows_json': json.dumps([list(r) for r in rows]),
@@ -1943,6 +1960,7 @@ def useu_list(request):
         'filtered_total': filtered_total,
         'active_count': active_count,
         'faulty_count': faulty_count,
+        'tp_stats': tp_stats,
         'dark_mode': profile.dark_mode,
         'current_page': page,
         'per_page': per_page,
