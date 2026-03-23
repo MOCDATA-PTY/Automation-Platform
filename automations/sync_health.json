@@ -1,8 +1,14 @@
 {
   "onedrive_token": {
-    "last_check": "2026-03-16T18:23:39.220702+02:00",
-    "status": "error",
-    "message": "Token refresh failed - re-authentication may be required",
+    "last_check": "2026-03-23T15:57:39.466453+02:00",
+    "status": "success",
+    "message": "Token is active",
+    "records": 0
+  },
+  "bounce_check": {
+    "last_check": "2026-03-17T18:56:20.333707+02:00",
+    "status": "success",
+    "message": "Marked 57 contacts as Undeliverable",
     "records": 0
   }
 }

@@ -78,6 +78,7 @@ def home(request):
         'ics': 'ics_pnl', 'imp': 'imp_pnl', 'jfk': 'jfk_pnl',
         'lax': 'lax_pnl', 'lcl': 'lcl_pnl', 'ord': 'ord_pnl',
         'dfw': 'dfw_pnl',
+        'import_ops': 'import_ops', 'wip_accrual': 'wip_accrual',
     }
     station_rows = {}
     for key, table in station_tables.items():
@@ -2933,3 +2934,151 @@ def get_tp_progress(request):
     tp_type = request.GET.get('tp_type', 'tp1')
     progress = get_touchpoint_progress(tp_type)
     return JsonResponse(progress)
+
+
+def import_ops(request):
+    """Import Operations page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM import_ops")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT mode) FROM import_ops WHERE mode != ''")
+            mode_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT origin_country) FROM import_ops WHERE origin_country != ''")
+            origin_country_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT destination_country) FROM import_ops WHERE destination_country != ''")
+            dest_country_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = mode_count = origin_country_count = dest_country_count = 0
+
+    last_sync = onedrive_sync.get_import_ops_last_sync()
+
+    return render(request, 'import_ops.html', {
+        'total_records': total_records,
+        'mode_count': mode_count,
+        'origin_country_count': origin_country_count,
+        'dest_country_count': dest_country_count,
+        'last_sync': last_sync
+    })
+
+
+# Import Ops sync progress tracking
+import_ops_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_import_ops_progress(status, message, current=0, total=0):
+    global import_ops_sync_progress
+    import_ops_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_import_ops(request):
+    """Sync Import Ops data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_import_ops_progress('starting', 'Starting Import Ops sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_import_ops_progress('syncing', 'Checking OneDrive for Import Ops files...', 10, 100)
+                count = onedrive_sync.sync_import_ops_data()
+                if count > 0:
+                    update_import_ops_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_import_ops_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_import_ops_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_import_ops_progress_view(request):
+    """Get Import Ops sync progress"""
+    return JsonResponse(import_ops_sync_progress)
+
+
+def wip_accrual(request):
+    """WIP & Accrual Report page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM wip_accrual")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT branch) FROM wip_accrual WHERE branch != ''")
+            branch_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT dept) FROM wip_accrual WHERE dept != ''")
+            dept_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT type) FROM wip_accrual WHERE type != ''")
+            type_count = cursor.fetchone()[0] or 0
+    except:
+        total_records = branch_count = dept_count = type_count = 0
+
+    last_sync = onedrive_sync.get_wip_accrual_last_sync()
+
+    return render(request, 'wip_accrual.html', {
+        'total_records': total_records,
+        'branch_count': branch_count,
+        'dept_count': dept_count,
+        'type_count': type_count,
+        'last_sync': last_sync
+    })
+
+
+# WIP Accrual sync progress tracking
+wip_accrual_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_wip_accrual_progress(status, message, current=0, total=0):
+    global wip_accrual_sync_progress
+    wip_accrual_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total
+    }
+
+
+@login_required
+def sync_wip_accrual(request):
+    """Sync WIP Accrual data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_wip_accrual_progress('starting', 'Starting WIP Accrual sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_wip_accrual_progress('syncing', 'Checking OneDrive for WIP Accrual files...', 10, 100)
+                count = onedrive_sync.sync_wip_accrual_data()
+                if count > 0:
+                    update_wip_accrual_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_wip_accrual_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_wip_accrual_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+
+        return JsonResponse({'status': 'started', 'message': 'Sync started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_wip_accrual_progress_view(request):
+    """Get WIP Accrual sync progress"""
+    return JsonResponse(wip_accrual_sync_progress)

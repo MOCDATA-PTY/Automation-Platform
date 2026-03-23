@@ -143,6 +143,72 @@ class TouchpointTemplate(models.Model):
         return f'Touchpoint {self.touchpoint_number}'
 
 
+class ImportOps(models.Model):
+    shipment_id = models.CharField(max_length=500, blank=True, default='')
+    shipment_direction = models.CharField(max_length=500, blank=True, default='')
+    report_date = models.CharField(max_length=500, blank=True, default='')
+    trans = models.CharField(max_length=500, blank=True, default='')
+    customs_info = models.CharField(max_length=500, blank=True, default='')
+    mode = models.CharField(max_length=500, blank=True, default='')
+    origin = models.CharField(max_length=500, blank=True, default='')
+    origin_country = models.CharField(max_length=500, blank=True, default='')
+    destination = models.CharField(max_length=500, blank=True, default='')
+    destination_country = models.CharField(max_length=500, blank=True, default='')
+    consignor_code = models.CharField(max_length=500, blank=True, default='')
+    consignor_name = models.CharField(max_length=500, blank=True, default='')
+    consignee_code = models.CharField(max_length=500, blank=True, default='')
+    consignee_name = models.CharField(max_length=500, blank=True, default='')
+    house_ref = models.CharField(max_length=500, blank=True, default='')
+    incoterm = models.CharField(max_length=500, blank=True, default='')
+    additional_terms = models.CharField(max_length=500, blank=True, default='')
+    ppd_ccx = models.CharField(max_length=500, blank=True, default='')
+    goods_description = models.CharField(max_length=500, blank=True, default='')
+    origin_etd = models.CharField(max_length=500, blank=True, default='')
+    destination_eta = models.CharField(max_length=500, blank=True, default='')
+    weight = models.CharField(max_length=500, blank=True, default='')
+    weight_unit = models.CharField(max_length=500, blank=True, default='')
+
+    class Meta:
+        db_table = 'import_ops'
+        managed = False
+
+    def __str__(self):
+        return self.shipment_id
+
+
+class WipAccrual(models.Model):
+    type = models.CharField(max_length=500, blank=True, default='')
+    branch = models.CharField(max_length=500, blank=True, default='')
+    dept = models.CharField(max_length=500, blank=True, default='')
+    charge_code = models.CharField(max_length=500, blank=True, default='')
+    job = models.CharField(max_length=500, blank=True, default='')
+    local_ref = models.CharField(max_length=500, blank=True, default='')
+    wip = models.CharField(max_length=500, blank=True, default='')
+    accrual = models.CharField(max_length=500, blank=True, default='')
+    net_total = models.CharField(max_length=500, blank=True, default='')
+    added = models.CharField(max_length=500, blank=True, default='')
+    age = models.CharField(max_length=500, blank=True, default='')
+    debtor_creditor = models.CharField(max_length=500, blank=True, default='')
+    stat = models.CharField(max_length=500, blank=True, default='')
+    job_branch = models.CharField(max_length=500, blank=True, default='')
+    controlling_agent = models.CharField(max_length=500, blank=True, default='')
+    controlling_customer = models.CharField(max_length=500, blank=True, default='')
+    management_group = models.CharField(max_length=500, blank=True, default='')
+    exp_group = models.CharField(max_length=500, blank=True, default='')
+    orig = models.CharField(max_length=500, blank=True, default='')
+    eta = models.CharField(max_length=500, blank=True, default='')
+    etd = models.CharField(max_length=500, blank=True, default='')
+    posted_by = models.CharField(max_length=500, blank=True, default='')
+    posted_by_fullname = models.CharField(max_length=500, blank=True, default='')
+
+    class Meta:
+        db_table = 'wip_accrual'
+        managed = False
+
+    def __str__(self):
+        return self.job
+
+
 class TurnoverData(models.Model):
     debtor = models.CharField(max_length=100)
     debtor_name = models.CharField(max_length=255)

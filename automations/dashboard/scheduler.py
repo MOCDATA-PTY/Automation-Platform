@@ -337,6 +337,40 @@ def run_dfw_sync_job():
         update_sync_health('dfw', 'error', str(e))
 
 
+def run_import_ops_sync_job():
+    """Run the Import Ops sync job"""
+    from . import onedrive_sync
+    from .views import update_import_ops_progress
+    try:
+        logger.info("Starting scheduled Import Ops sync...")
+        update_import_ops_progress('running', 'Scheduled Import Ops sync starting...', 0, 100)
+        count = onedrive_sync.sync_import_ops_data()
+        logger.info(f"Scheduled Import Ops sync complete: {count} records synced")
+        update_import_ops_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('import_ops', 'success', f'No file' if count == 0 else f'Synced {count} records', count)
+    except Exception as e:
+        logger.error(f"Scheduled Import Ops sync error: {e}")
+        update_import_ops_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('import_ops', 'error', str(e))
+
+
+def run_wip_accrual_sync_job():
+    """Run the WIP Accrual sync job"""
+    from . import onedrive_sync
+    from .views import update_wip_accrual_progress
+    try:
+        logger.info("Starting scheduled WIP Accrual sync...")
+        update_wip_accrual_progress('running', 'Scheduled WIP Accrual sync starting...', 0, 100)
+        count = onedrive_sync.sync_wip_accrual_data()
+        logger.info(f"Scheduled WIP Accrual sync complete: {count} records synced")
+        update_wip_accrual_progress('complete', f'Synced {count} records', 100, 100)
+        update_sync_health('wip_accrual', 'success', f'No file' if count == 0 else f'Synced {count} records', count)
+    except Exception as e:
+        logger.error(f"Scheduled WIP Accrual sync error: {e}")
+        update_wip_accrual_progress('error', f'Scheduled sync error: {str(e)}', 0, 100)
+        update_sync_health('wip_accrual', 'error', str(e))
+
+
 def run_creditor_sync_job():
     """Run the Creditor sync job"""
     from . import onedrive_sync
@@ -715,6 +749,24 @@ def start_scheduler():
         trigger=IntervalTrigger(hours=1),
         id='dfw_sync',
         name='Sync DFW data every hour',
+        replace_existing=True
+    )
+
+    # Run Import Ops sync every hour
+    scheduler.add_job(
+        run_import_ops_sync_job,
+        trigger=IntervalTrigger(hours=1),
+        id='import_ops_sync',
+        name='Sync Import Ops data every hour',
+        replace_existing=True
+    )
+
+    # Run WIP Accrual sync every hour
+    scheduler.add_job(
+        run_wip_accrual_sync_job,
+        trigger=IntervalTrigger(hours=1),
+        id='wip_accrual_sync',
+        name='Sync WIP Accrual data every hour',
         replace_existing=True
     )
 

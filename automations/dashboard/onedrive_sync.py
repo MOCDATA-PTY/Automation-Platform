@@ -3744,3 +3744,185 @@ def get_dfw_last_sync():
             return data
     except:
         return None
+
+
+def sync_import_ops_data():
+    """Sync Import Operations data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_IMPORT_OPS_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in Import Ops folder")
+
+    total_inserted = 0
+    processed_files = []
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            try:
+                wb = openpyxl.load_workbook(file_content, read_only=True, data_only=True)
+                ws = wb['Shipment Profile']
+
+                rows_to_insert = []
+                for row_idx, row in enumerate(ws.iter_rows(min_row=15, values_only=False), start=15):
+                    cells = [cell.value for cell in row]
+                    # Data starts at column C (index 2), 23 columns
+                    vals = cells[2:25] if len(cells) > 24 else cells[2:] + [None] * (23 - max(0, len(cells) - 2))
+
+                    # Skip empty rows (check if shipment_id is empty)
+                    if not vals[0]:
+                        continue
+
+                    row_data = tuple(str(v).strip() if v is not None else '' for v in vals)
+                    rows_to_insert.append(row_data)
+
+                wb.close()
+
+                if rows_to_insert:
+                    with connection.cursor() as cur:
+                        # Clear existing data and insert fresh
+                        cur.execute("DELETE FROM import_ops")
+                        insert_query = """
+                            INSERT INTO import_ops (
+                                shipment_id, shipment_direction, report_date, trans, customs_info,
+                                mode, origin, origin_country, destination, destination_country,
+                                consignor_code, consignor_name, consignee_code, consignee_name,
+                                house_ref, incoterm, additional_terms, ppd_ccx, goods_description,
+                                origin_etd, destination_eta, weight, weight_unit
+                            ) VALUES %s
+                        """
+                        execute_values(cur, insert_query, rows_to_insert)
+                        total_inserted = len(rows_to_insert)
+                        print(f"  Inserted {total_inserted} records")
+
+                processed_files.append(file_info)
+            except Exception as e:
+                print(f"  Error processing {file_info['name']}: {e}")
+                import traceback
+                traceback.print_exc()
+
+    if not processed_files:
+        print(f"\nNo files to sync")
+
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': total_inserted > 0}
+    with open(settings.IMPORT_OPS_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return total_inserted
+
+
+def get_import_ops_last_sync():
+    """Get the last Import Ops sync info"""
+    try:
+        with open(settings.IMPORT_OPS_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+
+def sync_wip_accrual_data():
+    """Sync WIP & Accrual data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_WIP_ACCRUAL_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    # Filter Excel files
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in WIP Accrual folder")
+
+    total_inserted = 0
+    processed_files = []
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            try:
+                wb = openpyxl.load_workbook(file_content, read_only=True, data_only=True)
+                ws = wb['Detailed Listing of Outstanding']
+
+                rows_to_insert = []
+                for row_idx, row in enumerate(ws.iter_rows(min_row=22, values_only=False), start=22):
+                    cells = [cell.value for cell in row]
+                    # Data starts at column C (index 2), 23 columns through column Y
+                    vals = cells[2:25] if len(cells) > 24 else cells[2:] + [None] * (23 - max(0, len(cells) - 2))
+
+                    # Skip empty rows (check if Type column is empty)
+                    if not vals[0]:
+                        continue
+
+                    row_data = tuple(str(v).strip() if v is not None else '' for v in vals)
+                    rows_to_insert.append(row_data)
+
+                wb.close()
+
+                if rows_to_insert:
+                    with connection.cursor() as cur:
+                        # Clear existing data and insert fresh
+                        cur.execute("DELETE FROM wip_accrual")
+                        insert_query = """
+                            INSERT INTO wip_accrual (
+                                type, branch, dept, charge_code, job, local_ref,
+                                wip, accrual, net_total, added, age,
+                                debtor_creditor, stat, job_branch, controlling_agent,
+                                controlling_customer, management_group, exp_group,
+                                orig, eta, etd, posted_by, posted_by_fullname
+                            ) VALUES %s
+                        """
+                        execute_values(cur, insert_query, rows_to_insert)
+                        total_inserted = len(rows_to_insert)
+                        print(f"  Inserted {total_inserted} records")
+
+                processed_files.append(file_info)
+            except Exception as e:
+                print(f"  Error processing {file_info['name']}: {e}")
+                import traceback
+                traceback.print_exc()
+
+    if not processed_files:
+        print(f"\nNo files to sync")
+
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': total_inserted > 0}
+    with open(settings.WIP_ACCRUAL_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return total_inserted
+
+
+def get_wip_accrual_last_sync():
+    """Get the last WIP Accrual sync info"""
+    try:
+        with open(settings.WIP_ACCRUAL_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
