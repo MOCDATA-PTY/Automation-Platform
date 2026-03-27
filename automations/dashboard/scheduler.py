@@ -788,23 +788,22 @@ def start_scheduler():
         replace_existing=True
     )
 
-    # Check for scheduled touchpoints every 30 minutes
-    scheduler.add_job(
-        run_scheduled_touchpoints,
-        trigger=IntervalTrigger(minutes=30),
-        id='scheduled_touchpoints',
-        name='Check and send scheduled touchpoints',
-        replace_existing=True
-    )
+    # DISABLED - Email touchpoints and bounce checking turned off
+    # scheduler.add_job(
+    #     run_scheduled_touchpoints,
+    #     trigger=IntervalTrigger(minutes=30),
+    #     id='scheduled_touchpoints',
+    #     name='Check and send scheduled touchpoints',
+    #     replace_existing=True
+    # )
 
-    # Check for bounce/NDR emails every 15 minutes
-    scheduler.add_job(
-        check_bounce_emails,
-        trigger=IntervalTrigger(minutes=15),
-        id='bounce_check',
-        name='Check bounce emails and mark Undeliverable',
-        replace_existing=True
-    )
+    # scheduler.add_job(
+    #     check_bounce_emails,
+    #     trigger=IntervalTrigger(minutes=15),
+    #     id='bounce_check',
+    #     name='Check bounce emails and mark Undeliverable',
+    #     replace_existing=True
+    # )
 
     # Refresh OneDrive token every minute to ensure it never expires
     scheduler.add_job(

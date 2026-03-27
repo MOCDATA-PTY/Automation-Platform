@@ -3804,6 +3804,12 @@ def sync_import_ops_data():
                         print(f"  Inserted {total_inserted} records")
 
                 processed_files.append(file_info)
+                # Delete file from OneDrive after successful sync
+                try:
+                    delete_file(file_info['id'])
+                    print(f"  Deleted {file_info['name']} from OneDrive")
+                except Exception as de:
+                    print(f"  Warning: Could not delete {file_info['name']}: {de}")
             except Exception as e:
                 print(f"  Error processing {file_info['name']}: {e}")
                 import traceback
@@ -3895,6 +3901,12 @@ def sync_wip_accrual_data():
                         print(f"  Inserted {total_inserted} records")
 
                 processed_files.append(file_info)
+                # Delete file from OneDrive after successful sync
+                try:
+                    delete_file(file_info['id'])
+                    print(f"  Deleted {file_info['name']} from OneDrive")
+                except Exception as de:
+                    print(f"  Warning: Could not delete {file_info['name']}: {de}")
             except Exception as e:
                 print(f"  Error processing {file_info['name']}: {e}")
                 import traceback
