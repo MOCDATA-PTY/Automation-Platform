@@ -1,6 +1,6 @@
 {
   "onedrive_token": {
-    "last_check": "2026-03-23T15:57:39.466453+02:00",
+    "last_check": "2026-03-31T07:18:05.385716+02:00",
     "status": "success",
     "message": "Token is active",
     "records": 0
@@ -9,6 +9,66 @@
     "last_check": "2026-03-17T18:56:20.333707+02:00",
     "status": "success",
     "message": "Marked 57 contacts as Undeliverable",
+    "records": 0
+  },
+  "ppg": {
+    "last_check": "2026-03-30T18:49:28.287863+02:00",
+    "status": "success",
+    "message": "No file",
+    "records": 0
+  },
+  "ccc": {
+    "last_check": "2026-03-30T19:49:23.958475+02:00",
+    "status": "error",
+    "message": "Failed to access folder: {\"error\":{\"code\":\"InvalidAuthenticationToken\",\"message\":\"Lifetime validation failed, the token is expired.\",\"innerError\":{\"date\":\"2026-03-30T17:49:24\",\"request-id\":\"980c2e1e-ab7b-4a91-a099-05dc1d3ade8e\",\"client-request-id\":\"980c2e1e-ab7b-4a91-a099-05dc1d3ade8e\"}}}",
+    "records": 0
+  },
+  "fax": {
+    "last_check": "2026-03-30T19:49:23.594680+02:00",
+    "status": "success",
+    "message": "No file",
+    "records": 0
+  },
+  "ccd": {
+    "last_check": "2026-03-30T19:49:23.748697+02:00",
+    "status": "success",
+    "message": "No file",
+    "records": 0
+  },
+  "con": {
+    "last_check": "2026-03-30T18:49:28.234432+02:00",
+    "status": "success",
+    "message": "No file",
+    "records": 0
+  },
+  "jfk": {
+    "last_check": "2026-03-30T19:49:23.889686+02:00",
+    "status": "success",
+    "message": "No file",
+    "records": 0
+  },
+  "dor": {
+    "last_check": "2026-03-30T17:49:28.560215+02:00",
+    "status": "success",
+    "message": "No file",
+    "records": 0
+  },
+  "atl": {
+    "last_check": "2026-03-30T18:49:28.052598+02:00",
+    "status": "success",
+    "message": "No file",
+    "records": 0
+  },
+  "hnl": {
+    "last_check": "2026-03-30T18:49:28.182120+02:00",
+    "status": "success",
+    "message": "No file",
+    "records": 0
+  },
+  "turnover": {
+    "last_check": "2026-03-30T19:49:23.542786+02:00",
+    "status": "success",
+    "message": "No file",
     "records": 0
   }
 }

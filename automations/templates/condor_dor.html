@@ -140,6 +140,42 @@
     fill: currentColor;
 }
 
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.sync-status {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #605e5c;
+    margin-top: 8px;
+}
+
+.sync-status.visible { display: flex; }
+.sync-status.success { color: #107c10; }
+.sync-status.error { color: #a4262c; }
+
+.sync-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid #edebe9;
+    border-top-color: #054B70;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.last-sync {
+    font-size: 12px;
+    color: #a19f9d;
+    margin-top: 4px;
+}
+
 .conn-string {
     background: #f3f2f1;
     padding: 12px;
@@ -153,9 +189,22 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1 class="page-title">Condor+DOR PNL</h1>
-    <p class="page-subtitle">Budget vs Actual P&L for Condor & DOR departments (CON, FEA, TRX, BRK)</p>
+<div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+    <div>
+        <h1 class="page-title">Condor+DOR PNL</h1>
+        <p class="page-subtitle">Budget vs Actual P&L for Condor & DOR departments (CON, FEA, TRX, BRK)</p>
+        {% if last_sync %}<div class="last-sync">Last synced: {{ last_sync }}</div>{% endif %}
+    </div>
+    <div>
+        <button class="btn" id="sync-btn" onclick="startSync()" style="margin-top:0;">
+            <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+            Sync Now
+        </button>
+        <div class="sync-status" id="sync-status">
+            <div class="sync-spinner" id="sync-spinner"></div>
+            <span id="sync-msg">Starting...</span>
+        </div>
+    </div>
 </div>
 
 <div class="stats-row">
@@ -311,6 +360,64 @@ in
 
 {% block scripts %}
 <script>
+function startSync() {
+    const btn = document.getElementById('sync-btn');
+    const status = document.getElementById('sync-status');
+    const spinner = document.getElementById('sync-spinner');
+    const msg = document.getElementById('sync-msg');
+
+    btn.disabled = true;
+    status.className = 'sync-status visible';
+    spinner.style.display = 'block';
+    msg.textContent = 'Starting sync...';
+
+    fetch('{% url "sync_condor_dor" %}', {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCookie('csrftoken')}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'error') {
+            status.className = 'sync-status visible error';
+            spinner.style.display = 'none';
+            msg.textContent = data.message;
+            btn.disabled = false;
+        } else {
+            pollProgress();
+        }
+    });
+}
+
+function pollProgress() {
+    const status = document.getElementById('sync-status');
+    const spinner = document.getElementById('sync-spinner');
+    const msg = document.getElementById('sync-msg');
+    const btn = document.getElementById('sync-btn');
+
+    fetch('{% url "sync_condor_dor_progress" %}')
+    .then(r => r.json())
+    .then(data => {
+        msg.textContent = data.message || 'Working...';
+        if (data.status === 'complete') {
+            status.className = 'sync-status visible success';
+            spinner.style.display = 'none';
+            btn.disabled = false;
+            setTimeout(() => location.reload(), 1500);
+        } else if (data.status === 'error') {
+            status.className = 'sync-status visible error';
+            spinner.style.display = 'none';
+            btn.disabled = false;
+        } else {
+            setTimeout(pollProgress, 1000);
+        }
+    });
+}
+
+function getCookie(name) {
+    let v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+    return v ? v[2] : null;
+}
+
 function copyQuery() {
     var query = 'SELECT *\nFROM condor_dor_pnl\nORDER BY branch, department, budget_actual, date, account_name;';
     navigator.clipboard.writeText(query).then(function() {

@@ -51,7 +51,72 @@ def logout_view(request):
 
 @login_required
 def home(request):
-    """Dashboard home page with project cards"""
+    """Dashboard home page"""
+    # Aggregate total records across all station tables
+    all_tables = {
+        'turnover_data': 'Turnover', 'ppg_pnl': 'PPG', 'dor_pnl': 'DOR',
+        'con_pnl': 'CON', 'atl_pnl': 'ATL', 'ccc_pnl': 'CCC',
+        'ccd_pnl': 'CCD', 'fax_pnl': 'FAX', 'hnl_pnl': 'HNL',
+        'hou_pnl': 'HOU', 'ics_pnl': 'ICS', 'imp_pnl': 'IMP',
+        'jfk_pnl': 'JFK', 'lax_pnl': 'LAX', 'lcl_pnl': 'LCL',
+        'ord_pnl': 'ORD', 'dfw_pnl': 'DFW', 'condor_dor_pnl': 'Condor+DOR',
+        'import_ops': 'Import Ops', 'wip_accrual': 'WIP & Accrual',
+        'creditor_transactions': 'Creditor',
+    }
+    total_records = 0
+    station_count = 0
+    top_stations = []
+    for table, label in all_tables.items():
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                count = cursor.fetchone()[0]
+                total_records += count
+                station_count += 1
+                top_stations.append((label, count))
+        except:
+            pass
+
+    top_stations.sort(key=lambda x: -x[1])
+    top_stations = top_stations[:6]
+
+    # Planner task counts
+    task_total = ProjectTask.objects.count()
+    task_done = ProjectTask.objects.filter(status='done').count()
+    task_in_progress = ProjectTask.objects.filter(status='in_progress').count()
+    task_todo = ProjectTask.objects.filter(status='todo').count()
+    projects = ProjectTask.objects.values_list('project_name', flat=True).distinct()
+    project_count = len([p for p in projects if p])
+
+    # Sync health
+    health_data = {}
+    try:
+        import json as _json
+        health_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sync_health.json')
+        with open(health_path) as f:
+            health_data = _json.load(f)
+    except:
+        pass
+    synced_count = sum(1 for v in health_data.values() if v.get('status') == 'success')
+
+    context = {
+        'total_records': total_records,
+        'station_count': station_count,
+        'top_stations': top_stations,
+        'task_total': task_total,
+        'task_done': task_done,
+        'task_in_progress': task_in_progress,
+        'task_todo': task_todo,
+        'project_count': project_count,
+        'synced_count': synced_count,
+        'health_total': len(health_data),
+    }
+    return render(request, 'home.html', context)
+
+
+@login_required
+def data_analysis(request):
+    """Data Analysis page with all stations"""
     try:
         total_rows = TurnoverData.objects.count()
         branch_count = TurnoverData.objects.values('branch').distinct().count()
@@ -59,26 +124,17 @@ def home(request):
         total_rows = 0
         branch_count = 0
 
-    # PNL stats
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) FROM pnl_data")
-            pnl_rows = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(DISTINCT division) FROM pnl_data")
-            pnl_divisions = cursor.fetchone()[0]
-    except:
-        pnl_rows = 0
-        pnl_divisions = 0
-
     # PNL station stats
     station_tables = {
+        'turnover': 'turnover_data',
         'ppg': 'ppg_pnl', 'dor': 'dor_pnl', 'con': 'con_pnl',
         'atl': 'atl_pnl', 'ccc': 'ccc_pnl', 'ccd': 'ccd_pnl',
         'fax': 'fax_pnl', 'hnl': 'hnl_pnl', 'hou': 'hou_pnl',
         'ics': 'ics_pnl', 'imp': 'imp_pnl', 'jfk': 'jfk_pnl',
         'lax': 'lax_pnl', 'lcl': 'lcl_pnl', 'ord': 'ord_pnl',
-        'dfw': 'dfw_pnl',
+        'dfw': 'dfw_pnl', 'condor_dor': 'condor_dor_pnl',
         'import_ops': 'import_ops', 'wip_accrual': 'wip_accrual',
+        'creditor': 'creditor_transactions'
     }
     station_rows = {}
     for key, table in station_tables.items():
@@ -89,40 +145,59 @@ def home(request):
         except:
             station_rows[f'{key}_rows'] = 0
 
-    # Creditor stats
+    # Creditor groups
     try:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) FROM creditor_transactions")
-            creditor_rows = cursor.fetchone()[0]
             cursor.execute("SELECT COUNT(DISTINCT creditor_group) FROM creditor_transactions")
             creditor_groups = cursor.fetchone()[0]
     except:
-        creditor_rows = 0
         creditor_groups = 0
 
-    # Condor+DOR stats
+    # Condor depts
     try:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) FROM condor_dor_pnl")
-            condor_rows = cursor.fetchone()[0]
             cursor.execute("SELECT COUNT(DISTINCT department) FROM condor_dor_pnl")
             condor_depts = cursor.fetchone()[0]
     except:
-        condor_rows = 0
         condor_depts = 0
 
+    # Load last sync times
+    sync_files = {
+        'turnover': 'last_sync.json',
+        'atl': 'atl_last_sync.json', 'ccc': 'ccc_last_sync.json',
+        'ccd': 'ccd_last_sync.json', 'con': 'con_last_sync.json',
+        'dor': 'dor_last_sync.json', 'fax': 'fax_last_sync.json',
+        'hnl': 'hnl_last_sync.json', 'hou': 'hou_last_sync.json',
+        'ics': 'ics_last_sync.json', 'imp': 'imp_last_sync.json',
+        'jfk': 'jfk_last_sync.json', 'lax': 'lax_last_sync.json',
+        'lcl': 'lcl_last_sync.json', 'ord': 'ord_last_sync.json',
+        'dfw': 'dfw_last_sync.json', 'ppg': 'ppg_last_sync.json',
+        'condor_dor': 'condor_dor_last_sync.json',
+        'import_ops': 'import_ops_last_sync.json',
+        'wip_accrual': 'wip_accrual_last_sync.json',
+    }
+    last_syncs = {}
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    for key, fname in sync_files.items():
+        try:
+            with open(os.path.join(base_dir, fname)) as f:
+                data = json.load(f)
+                ts = data.get('last_sync', '')
+                if ts:
+                    from datetime import datetime as _dt
+                    dt = _dt.fromisoformat(ts)
+                    last_syncs[f'{key}_last_sync'] = dt.strftime('%d %b %Y, %H:%M')
+        except:
+            pass
+
     context = {
-        'total_rows': total_rows,
         'branch_count': branch_count,
-        'pnl_rows': pnl_rows,
-        'pnl_divisions': pnl_divisions,
-        'creditor_rows': creditor_rows,
         'creditor_groups': creditor_groups,
-        'condor_rows': condor_rows,
         'condor_depts': condor_depts,
         **station_rows,
+        **last_syncs,
     }
-    return render(request, 'home.html', context)
+    return render(request, 'data_analysis.html', context)
 
 
 @login_required
@@ -1543,7 +1618,48 @@ def condor_dor(request):
         'budget_rows': budget_rows,
         'actual_rows': actual_rows,
     }
+    context['last_sync'] = onedrive_sync.get_condor_dor_last_sync()
     return render(request, 'condor_dor.html', context)
+
+
+condor_dor_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_condor_dor_progress(status, message, current=0, total=0):
+    global condor_dor_sync_progress
+    condor_dor_sync_progress = {'status': status, 'message': message, 'current': current, 'total': total}
+
+
+@login_required
+def sync_condor_dor(request):
+    """Manually sync Condor+DOR PNL data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_condor_dor_progress('starting', 'Starting Condor+DOR sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_condor_dor_progress('syncing', 'Checking OneDrive for Condor+DOR files...', 10, 100)
+                count = onedrive_sync.sync_condor_dor_data()
+                if count > 0:
+                    update_condor_dor_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_condor_dor_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_condor_dor_progress('error', f'Error: {str(e)}', 0, 100)
+
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+        return JsonResponse({'status': 'started'})
+    return redirect('condor_dor')
+
+
+@login_required
+def sync_condor_dor_progress(request):
+    """Get Condor+DOR sync progress"""
+    return JsonResponse(condor_dor_sync_progress)
 
 
 # --- Sync Monitor ---
@@ -3082,3 +3198,94 @@ def sync_wip_accrual(request):
 def sync_wip_accrual_progress_view(request):
     """Get WIP Accrual sync progress"""
     return JsonResponse(wip_accrual_sync_progress)
+
+
+# --- Software: Planner & Gantt ---
+
+@login_required
+def planner(request):
+    """System planner - Kanban board grouped by project"""
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'create':
+            ProjectTask.objects.create(
+                title=request.POST.get('title', '').strip(),
+                description=request.POST.get('description', '').strip(),
+                status=request.POST.get('status', 'todo'),
+                priority=request.POST.get('priority', 'medium'),
+                project_name=request.POST.get('project_name', '').strip(),
+                start_date=request.POST.get('start_date') or None,
+                end_date=request.POST.get('end_date') or None,
+            )
+        elif action == 'update':
+            task_id = request.POST.get('task_id')
+            try:
+                task = ProjectTask.objects.get(id=task_id)
+                task.title = request.POST.get('title', task.title).strip()
+                task.description = request.POST.get('description', task.description).strip()
+                task.status = request.POST.get('status', task.status)
+                task.priority = request.POST.get('priority', task.priority)
+                task.project_name = request.POST.get('project_name', task.project_name).strip()
+                task.start_date = request.POST.get('start_date') or None
+                task.end_date = request.POST.get('end_date') or None
+                task.save()
+            except ProjectTask.DoesNotExist:
+                pass
+        elif action == 'delete':
+            task_id = request.POST.get('task_id')
+            ProjectTask.objects.filter(id=task_id).delete()
+        elif action == 'move':
+            task_id = request.POST.get('task_id')
+            new_status = request.POST.get('status')
+            ProjectTask.objects.filter(id=task_id).update(status=new_status)
+            return JsonResponse({'status': 'ok'})
+        return redirect('planner')
+
+    tasks = ProjectTask.objects.filter(parent=None).order_by('project_name', 'created_at')
+    projects = tasks.values_list('project_name', flat=True).distinct()
+
+    columns = [
+        ('backlog', 'Backlog'),
+        ('todo', 'To Do'),
+        ('in_progress', 'In Progress'),
+        ('review', 'Review'),
+        ('done', 'Done'),
+    ]
+
+    board = {}
+    for status, label in columns:
+        board[status] = {'label': label, 'tasks': list(tasks.filter(status=status))}
+
+    return render(request, 'planner.html', {
+        'board': board,
+        'columns': columns,
+        'projects': sorted(set(p for p in projects if p)),
+        'all_tasks': tasks,
+    })
+
+
+@login_required
+def gantt(request):
+    """Gantt chart for all project tasks with dates"""
+    tasks = ProjectTask.objects.filter(
+        parent=None, start_date__isnull=False, end_date__isnull=False
+    ).order_by('project_name', 'start_date')
+
+    import json as _json
+    tasks_data = [
+        {
+            'id': t.id,
+            'title': t.title,
+            'project': t.project_name or 'General',
+            'status': t.status,
+            'priority': t.priority,
+            'start': t.start_date.isoformat(),
+            'end': t.end_date.isoformat(),
+        }
+        for t in tasks
+    ]
+
+    return render(request, 'gantt.html', {
+        'tasks_json': _json.dumps(tasks_data),
+        'has_tasks': bool(tasks_data),
+    })

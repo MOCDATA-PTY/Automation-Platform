@@ -107,32 +107,8 @@
             flex-shrink: 0;
         }
 
-        .sidebar-logo {
-            width: 32px;
-            height: 32px;
-            background: rgba(255,255,255,0.15);
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.12);
-            backdrop-filter: blur(4px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            transition: background 0.2s ease;
-        }
-
-        .sidebar:hover .sidebar-logo {
-            background: rgba(255,255,255,0.2);
-        }
-
-        .sidebar-logo svg {
-            width: 16px;
-            height: 16px;
-            fill: #fff;
-        }
-
         .sidebar-brand-wrap {
-            margin-left: 12px;
+            margin-left: 0;
             white-space: nowrap;
             opacity: 0;
             transition: opacity 0.2s ease;
@@ -224,6 +200,45 @@
 
         .sidebar:hover .sidebar-menu .label {
             opacity: 1;
+        }
+
+        .sidebar-section {
+            padding: 14px 13px 4px;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 1.4px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.35);
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            overflow: hidden;
+        }
+
+        .sidebar:hover .sidebar-section {
+            opacity: 1;
+        }
+
+        .station-badge {
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            color: rgba(255,255,255,0.7);
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            transition: background 0.15s ease;
+        }
+
+        .sidebar-menu a:hover .station-badge,
+        .sidebar-menu a.active .station-badge {
+            background: rgba(255,255,255,0.2);
+            color: #fff;
         }
 
         /* Footer / sign-out */
@@ -378,9 +393,6 @@
     <!-- Sidebar -->
     <aside class="sidebar">
         <div class="sidebar-header">
-            <div class="sidebar-logo">
-                <svg viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>
-            </div>
             <div class="sidebar-brand-wrap">
                 <div class="sidebar-brand-name">MOC</div>
                 <div class="sidebar-brand-sub">Automations</div>
@@ -394,6 +406,14 @@
                         <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                     </span>
                     <span class="label">Home</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'data_analysis' %}" class="{% if request.resolver_match.url_name == 'data_analysis' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+                    </span>
+                    <span class="label">Data Analysis</span>
                 </a>
             </li>
             <li>
@@ -428,6 +448,7 @@
                     <span class="label">Settings</span>
                 </a>
             </li>
+
         </ul>
 
         <div class="sidebar-footer">
@@ -444,160 +465,7 @@
     <main class="main-content">
         {% block content %}{% endblock %}
 
-        {% with url_name=request.resolver_match.url_name %}
-        {% if url_name not in 'home,sync_monitor,login,logout,email_templates,useu_list' %}
-        <div class="powerbi-section" id="powerbi-section">
-            <div class="powerbi-header">
-                <div class="powerbi-title">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="#f2c811"><path d="M21 3H3C1.9 3 1 3.9 1 5v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-9-2h2v-5h-2v5zm-4 0h2V7h-2v10zm8 0h2v-8h-2v8z"/></svg>
-                    <span>Power BI Report</span>
-                </div>
-                <div class="powerbi-actions">
-                    <button class="powerbi-btn" id="pbi-configure-btn" onclick="togglePBIConfig()">
-                        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-                        Configure
-                    </button>
-                    <button class="powerbi-btn powerbi-toggle-btn" onclick="togglePBIFrame()" id="pbi-toggle-btn">
-                        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M7 14l5-5 5 5z"/></svg>
-                        Hide
-                    </button>
-                </div>
-            </div>
-
-            <div id="pbi-config-panel" style="display:none; padding:12px 16px; background:#f8f9fa; border-bottom:1px solid #e0e0e0;">
-                <div style="display:flex; gap:8px; align-items:center;">
-                    <input type="text" id="pbi-url-input" placeholder="Paste Power BI embed URL here (iframe src)..."
-                        style="flex:1; padding:8px 12px; border:1px solid #ccc; border-radius:6px; font-size:13px;">
-                    <button onclick="savePBIEmbed()" style="padding:8px 16px; background:#054B70; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Save</button>
-                    <button onclick="clearPBIEmbed()" style="padding:8px 16px; background:#dc3545; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Clear</button>
-                </div>
-                <div id="pbi-save-msg" style="margin-top:6px; font-size:12px; color:#28a745; display:none;">Saved successfully.</div>
-            </div>
-
-            <div id="pbi-frame-wrap">
-                <div id="pbi-placeholder" style="display:flex; align-items:center; justify-content:center; height:120px; color:#999; font-size:14px; gap:8px;">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="#ccc"><path d="M21 3H3C1.9 3 1 3.9 1 5v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-9-2h2v-5h-2v5zm-4 0h2V7h-2v10zm8 0h2v-8h-2v8z"/></svg>
-                    No Power BI report configured. Click Configure to add one.
-                </div>
-                <iframe id="pbi-iframe" src="" frameborder="0" allowfullscreen="true"
-                    style="display:none; width:100%; height:600px; border:none;"></iframe>
-            </div>
-        </div>
-        {% endif %}
-        {% endwith %}
     </main>
-
-    <style>
-    .powerbi-section {
-        margin: 24px 0 0 0;
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        overflow: hidden;
-        background: #fff;
-    }
-    .powerbi-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 12px 16px;
-        background: #054B70;
-        color: #fff;
-    }
-    .powerbi-title {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: 600;
-        font-size: 14px;
-    }
-    .powerbi-actions { display: flex; gap: 8px; }
-    .powerbi-btn {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        padding: 5px 12px;
-        background: rgba(255,255,255,0.15);
-        border: 1px solid rgba(255,255,255,0.3);
-        border-radius: 5px;
-        color: #fff;
-        font-size: 12px;
-        cursor: pointer;
-    }
-    .powerbi-btn:hover { background: rgba(255,255,255,0.25); }
-    </style>
-
-    <script>
-    (function() {
-        const PAGE = '{{ request.resolver_match.url_name }}';
-        const iframe = document.getElementById('pbi-iframe');
-        const placeholder = document.getElementById('pbi-placeholder');
-        const urlInput = document.getElementById('pbi-url-input');
-
-        // Load saved embed URL on page load
-        if (PAGE && iframe) {
-            fetch('/powerbi/embed/?page=' + PAGE)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.embed_url) {
-                        iframe.src = data.embed_url;
-                        iframe.style.display = 'block';
-                        if (placeholder) placeholder.style.display = 'none';
-                        if (urlInput) urlInput.value = data.embed_url;
-                    }
-                });
-        }
-
-        window.togglePBIConfig = function() {
-            const panel = document.getElementById('pbi-config-panel');
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-        };
-
-        window.togglePBIFrame = function() {
-            const wrap = document.getElementById('pbi-frame-wrap');
-            const btn = document.getElementById('pbi-toggle-btn');
-            if (wrap.style.display === 'none') {
-                wrap.style.display = 'block';
-                btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M7 14l5-5 5 5z"/></svg> Hide';
-            } else {
-                wrap.style.display = 'none';
-                btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M7 10l5 5 5-5z"/></svg> Show';
-            }
-        };
-
-        window.savePBIEmbed = function() {
-            const url = urlInput ? urlInput.value.trim() : '';
-            fetch('/powerbi/embed/save/', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
-                body: JSON.stringify({page: PAGE, embed_url: url})
-            }).then(r => r.json()).then(data => {
-                if (data.status === 'ok') {
-                    if (url) {
-                        iframe.src = url;
-                        iframe.style.display = 'block';
-                        if (placeholder) placeholder.style.display = 'none';
-                    } else {
-                        iframe.src = '';
-                        iframe.style.display = 'none';
-                        if (placeholder) placeholder.style.display = 'flex';
-                    }
-                    const msg = document.getElementById('pbi-save-msg');
-                    if (msg) { msg.style.display = 'block'; setTimeout(() => msg.style.display = 'none', 3000); }
-                }
-            });
-        };
-
-        window.clearPBIEmbed = function() {
-            if (urlInput) urlInput.value = '';
-            window.savePBIEmbed();
-        };
-
-        function getCookie(name) {
-            let v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
-            return v ? v[2] : null;
-        }
-    })();
-    </script>
 
     <!-- Global responsive overrides — apply to all pages -->
     <style>
@@ -657,9 +525,7 @@
     [data-theme="dark"] .sync-chip { background: var(--surface2); color: var(--text-secondary); }
     [data-theme="dark"] .refresh-bar-wrap { background: transparent; }
     [data-theme="dark"] .refresh-bar { background: #6cb4d8; }
-    [data-theme="dark"] .powerbi-section { background: var(--surface); border-color: var(--border); }
-    [data-theme="dark"] #pbi-config-panel { background: var(--surface2); border-color: var(--border); }
-    [data-theme="dark"] #pbi-url-input { background: var(--bg); color: var(--text-primary); border-color: var(--border); }
+
 
     @media (max-width: 900px) {
         .grid-2, .grid-3 { grid-template-columns: 1fr !important; }
@@ -682,10 +548,6 @@
         .card-header { padding: 12px 14px !important; }
         .page-header { margin-bottom: 16px !important; }
         table { min-width: 500px; }
-        .powerbi-header { flex-wrap: wrap; gap: 8px; }
-        .powerbi-actions { flex-wrap: wrap; }
-        #pbi-config-panel > div { flex-direction: column !important; }
-        #pbi-url-input { width: 100% !important; }
     }
     </style>
 

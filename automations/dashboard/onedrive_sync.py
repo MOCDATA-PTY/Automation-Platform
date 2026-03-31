@@ -1,4 +1,11 @@
 """OneDrive sync module for MOC Automations"""
+import sys
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 import os
 import json
 import io
@@ -245,7 +252,7 @@ def delete_file(file_id):
 
 def get_branch(filename):
     """Extract branch code from filename"""
-    branches = ['ATL', 'HEC', 'HNL', 'HOU', 'ICS', 'IMP', 'JFK', 'LAX', 'LCL', 'ORD', 'PPG']
+    branches = ['ATL', 'DFW', 'HEC', 'HNL', 'HOU', 'ICS', 'IMP', 'JFK', 'LAX', 'LCL', 'ORD', 'PPG']
     filename_upper = filename.upper()
 
     # Check if filename starts with branch code
@@ -279,7 +286,7 @@ def extract_report_date(ws):
         pass
     return None
 
-KNOWN_BRANCHES = ['ATL', 'HEC', 'HNL', 'HOU', 'ICS', 'IMP', 'JFK', 'LAX', 'LCL', 'ORD', 'PPG', 'CON', 'DOR']
+KNOWN_BRANCHES = ['ATL', 'DFW', 'HEC', 'HNL', 'HOU', 'ICS', 'IMP', 'JFK', 'LAX', 'LCL', 'ORD', 'PPG', 'CON', 'DOR']
 
 def get_branch_from_file(ws):
     """Extract branch code from inside the Excel file by scanning header rows."""
