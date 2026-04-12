@@ -580,9 +580,9 @@ def calculate_week_number(report_date, month_yyyymm):
     # Same month as report - calculate based on report date day
     day = report_date.day
 
-    # Days 1-7 = No week (too early!)
+    # Days 1-7 = Week 1 (early in month, but data exists)
     if day <= 7:
-        return None  # Too early - no week yet
+        return 1
 
     # February: only 4 weeks (no 29th), Week 1=8, Week 2=15, Week 3=22, Week 4=28 (final)
     if data_month == 2:
@@ -889,22 +889,33 @@ def sync_ppg_data():
             week_query = """
                 INSERT INTO ppg_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month to keep them separate
-            # Group rows by month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
-                month = row[3]  # date (YYYYMM)
+                month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -1056,21 +1067,26 @@ def sync_dor_data():
             week_query = """
                 INSERT INTO dor_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
                 month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -1229,21 +1245,33 @@ def sync_con_data():
             week_query = """
                 INSERT INTO con_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
                 month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -1385,22 +1413,33 @@ def sync_atl_data():
             week_query = """
                 INSERT INTO atl_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month to keep them separate
-            # Group rows by month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
-                month = row[3]  # date (YYYYMM)
+                month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -1537,22 +1576,33 @@ def sync_hnl_data():
             week_query = """
                 INSERT INTO hnl_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month to keep them separate
-            # Group rows by month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
-                month = row[3]  # date (YYYYMM)
+                month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -1697,22 +1747,33 @@ def sync_jfk_data():
             week_query = """
                 INSERT INTO jfk_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month to keep them separate
-            # Group rows by month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
-                month = row[3]  # date (YYYYMM)
+                month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -1917,22 +1978,33 @@ def sync_ccc_data():
         week_query = """
             INSERT INTO ccc_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
             VALUES %s
+            ON CONFLICT (division, account_name, date, week, budget_actual)
+            DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
         """
+        # Deduplicate all_rows - keep last occurrence per unique key
+        dedup = {}
+        for row in all_rows:
+            key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+            dedup[key] = row
+        all_rows = list(dedup.values())
+
         execute_values(cur, week_query, all_rows)
         print(f"  Inserted {len(all_rows)} week records")
 
-        # Duplicate rows as "Total" - separately for each month to keep them separate
-        # Group rows by month
+        # Duplicate rows as "Total" - deduplicate to avoid conflicts
         from collections import defaultdict
         rows_by_month = defaultdict(list)
         for row in all_rows:
-            month = row[3]  # date (YYYYMM)
+            month = row[3]
             rows_by_month[month].append(row)
 
-        # For each month, duplicate its rows as Total
         total_count = 0
         for month, month_rows in rows_by_month.items():
-            total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+            total_dedup = {}
+            for row in month_rows:
+                key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+            total_rows = list(total_dedup.values())
             execute_values(cur, week_query, total_rows)
             total_count += len(total_rows)
             print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -2077,22 +2149,33 @@ def sync_ccd_data():
             week_query = """
                 INSERT INTO ccd_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month to keep them separate
-            # Group rows by month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
-                month = row[3]  # date (YYYYMM)
+                month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -2236,22 +2319,33 @@ def sync_fax_data():
             week_query = """
                 INSERT INTO fax_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month to keep them separate
-            # Group rows by month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
-                month = row[3]  # date (YYYYMM)
+                month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -2395,22 +2489,33 @@ def sync_imp_data():
             week_query = """
                 INSERT INTO imp_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month to keep them separate
-            # Group rows by month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
-                month = row[3]  # date (YYYYMM)
+                month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -2554,22 +2659,34 @@ def sync_hou_data():
             week_query = """
                 INSERT INTO hou_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month to keep them separate
-            # Group rows by month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
-                month = row[3]  # date (YYYYMM)
+                month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                # Deduplicate Total rows - keep last value per unique key
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -2713,22 +2830,33 @@ def sync_ics_data():
             week_query = """
                 INSERT INTO ics_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month to keep them separate
-            # Group rows by month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
-                month = row[3]  # date (YYYYMM)
+                month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -2872,22 +3000,33 @@ def sync_lax_data():
             week_query = """
                 INSERT INTO lax_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month to keep them separate
-            # Group rows by month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
-                month = row[3]  # date (YYYYMM)
+                month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -3031,22 +3170,33 @@ def sync_lcl_data():
             week_query = """
                 INSERT INTO lcl_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month to keep them separate
-            # Group rows by month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
-                month = row[3]  # date (YYYYMM)
+                month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -3190,22 +3340,33 @@ def sync_ord_data():
             week_query = """
                 INSERT INTO ord_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
-            # Duplicate rows as "Total" - separately for each month to keep them separate
-            # Group rows by month
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
-                month = row[3]  # date (YYYYMM)
+                month = row[3]
                 rows_by_month[month].append(row)
 
-            # For each month, duplicate its rows as Total
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -3681,10 +3842,20 @@ def sync_dfw_data():
             week_query = """
                 INSERT INTO dfw_pnl (division, account_name, value, date, date_fixed, budget_actual, week, report_date)
                 VALUES %s
+                ON CONFLICT (division, account_name, date, week, budget_actual)
+                DO UPDATE SET value = EXCLUDED.value, date_fixed = EXCLUDED.date_fixed, report_date = EXCLUDED.report_date
             """
+            # Deduplicate all_rows - keep last occurrence per unique key
+            dedup = {}
+            for row in all_rows:
+                key = (row[0], row[1], row[3], row[5], row[6])  # division, account_name, date, budget_actual, week
+                dedup[key] = row
+            all_rows = list(dedup.values())
+
             execute_values(cur, week_query, all_rows)
             print(f"  Inserted {len(all_rows)} week records")
 
+            # Duplicate rows as "Total" - deduplicate to avoid conflicts
             from collections import defaultdict
             rows_by_month = defaultdict(list)
             for row in all_rows:
@@ -3692,7 +3863,11 @@ def sync_dfw_data():
 
             total_count = 0
             for month, month_rows in rows_by_month.items():
-                total_rows = [(row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7]) for row in month_rows]
+                total_dedup = {}
+                for row in month_rows:
+                    key = (row[0], row[1], row[3], row[5])  # division, account_name, date, budget_actual
+                    total_dedup[key] = (row[0], row[1], row[2], row[3], row[4], row[5], 'Total', row[7])
+                total_rows = list(total_dedup.values())
                 execute_values(cur, week_query, total_rows)
                 total_count += len(total_rows)
                 print(f"  Inserted {len(total_rows)} Total records for month {month}")
@@ -3935,6 +4110,229 @@ def get_wip_accrual_last_sync():
     """Get the last WIP Accrual sync info"""
     try:
         with open(settings.WIP_ACCRUAL_LAST_SYNC_FILE, 'r') as f:
+            data = json.load(f)
+            if 'last_sync' in data:
+                dt = datetime.fromisoformat(data['last_sync'])
+                return {
+                    'time': dt.strftime('%H:%M'),
+                    'date': dt.strftime('%B %d, %Y')
+                }
+            return data
+    except:
+        return None
+
+
+def process_tfs_excel_file(file_content, filename):
+    """Process TFS Weekly Data Excel file.
+
+    Reads the 'TFS Financial Data' sheet and 'Utilization Data' sheet,
+    unpivots year columns into rows for Power BI, and merges utilization metrics.
+    Returns list of tuples: (week_number, year, revenue, miles, rpm, rpt, util, yoy, trucks)
+    """
+    wb = openpyxl.load_workbook(file_content, read_only=True, data_only=True)
+
+    # --- Read utilization data (keyed by week index) ---
+    util_by_week = {}
+    num_trucks = 32  # default
+    if 'Utilization Data' in wb.sheetnames:
+        ws_util = wb['Utilization Data']
+        week_idx = 0
+        for row_idx, row in enumerate(ws_util.iter_rows(min_row=1, values_only=True)):
+            # First row may have num_trucks in column G (index 6)
+            if row_idx == 0 and len(row) > 6 and row[6] is not None:
+                try:
+                    num_trucks = int(row[6])
+                except (ValueError, TypeError):
+                    pass
+
+            # Data rows: Miles, RPM, RPT, Utilization %
+            if row_idx >= 1 and row[0] is not None:
+                week_idx += 1
+                week_key = f"W{week_idx:02d}"
+                try:
+                    util_by_week[week_key] = {
+                        'miles': float(row[0]) if row[0] else None,
+                        'rpm': float(row[1]) if row[1] else None,
+                        'rpt': float(row[2]) if row[2] else None,
+                        'util': float(row[3]) if row[3] else None,
+                    }
+                except (ValueError, TypeError, IndexError):
+                    pass
+
+    # --- Read financial data sheet ---
+    # Try both possible sheet names
+    ws = None
+    for name in wb.sheetnames:
+        if 'financial' in name.lower() and 'tfs' in name.lower():
+            ws = wb[name]
+            break
+    if ws is None and 'Combined Data' in wb.sheetnames:
+        ws = wb['Combined Data']
+    if ws is None:
+        # Fallback: use first sheet with data
+        for name in wb.sheetnames:
+            if name != 'Charts':
+                ws = wb[name]
+                break
+
+    if ws is None:
+        wb.close()
+        return []
+
+    rows_out = []
+    year_columns = {}  # {col_index: year}
+
+    for row_idx, row in enumerate(ws.iter_rows(min_row=1, values_only=True)):
+        if row_idx == 0:
+            # Header row - find year columns
+            for col_idx, cell in enumerate(row):
+                if cell is not None:
+                    cell_str = str(cell).strip()
+                    if cell_str.isdigit() and 2020 <= int(cell_str) <= 2030:
+                        year_columns[col_idx] = int(cell_str)
+            continue
+
+        # Data rows
+        week = row[0] if row and row[0] else None
+        if not week or not str(week).startswith('W'):
+            # Skip totals row and empty rows
+            if week and str(week).lower().startswith('total'):
+                continue
+            continue
+
+        week_str = str(week).strip()
+
+        # Read YoY change (column after last year, typically index 5)
+        yoy = None
+        yoy_col = max(year_columns.keys()) + 1 if year_columns else 5
+        if len(row) > yoy_col and row[yoy_col] is not None:
+            try:
+                yoy = float(row[yoy_col])
+            except (ValueError, TypeError):
+                pass
+
+        # Get utilization data for this week
+        util_data = util_by_week.get(week_str, {})
+
+        # Unpivot: one row per week+year
+        for col_idx, year in year_columns.items():
+            revenue = None
+            if len(row) > col_idx and row[col_idx] is not None:
+                try:
+                    revenue = float(row[col_idx])
+                except (ValueError, TypeError):
+                    continue
+            else:
+                continue  # Skip years with no data for this week
+
+            # Only attach utilization/miles to the most recent year with data
+            current_year = max(year_columns.values())
+            if year == current_year:
+                miles = util_data.get('miles')
+                rpm = util_data.get('rpm')
+                rpt = util_data.get('rpt')
+                util = util_data.get('util')
+                row_yoy = yoy
+            else:
+                miles = None
+                rpm = None
+                rpt = None
+                util = None
+                row_yoy = None
+
+            rows_out.append((
+                week_str,       # week_number
+                year,           # year
+                revenue,        # revenue
+                miles,          # miles
+                rpm,            # revenue_per_mile
+                rpt,            # revenue_per_truck
+                util,           # utilization_pct
+                row_yoy,        # yoy_change
+                num_trucks,     # num_trucks
+            ))
+
+    wb.close()
+    return rows_out
+
+
+def sync_tfs_data():
+    """Sync TFS Weekly Data from OneDrive to PostgreSQL"""
+    folder_path = settings.ONEDRIVE_TFS_FOLDER_PATH
+    files = list_files_in_folder(folder_path)
+
+    excel_files = [
+        f for f in files
+        if f['name'].lower().endswith(('.xlsx', '.xls'))
+    ]
+
+    print(f"Found {len(excel_files)} Excel files in TFS folder")
+
+    all_rows = []
+    processed_files = []
+
+    for file_info in excel_files:
+        print(f"Processing {file_info['name']}...")
+        file_content = download_file(file_info['id'])
+
+        if file_content:
+            try:
+                rows = process_tfs_excel_file(file_content, file_info['name'])
+                all_rows.extend(rows)
+                print(f"  Extracted {len(rows)} records")
+                processed_files.append(file_info)
+            except Exception as e:
+                print(f"  Error processing {file_info['name']}: {e}")
+                import traceback
+                traceback.print_exc()
+
+    if all_rows:
+        with connection.cursor() as cur:
+            # Clear and replace all TFS data
+            cur.execute("DELETE FROM tfs_weekly")
+
+            insert_query = """
+                INSERT INTO tfs_weekly (
+                    week_number, year, revenue, miles, revenue_per_mile,
+                    revenue_per_truck, utilization_pct, yoy_change, num_trucks
+                ) VALUES %s
+                ON CONFLICT (week_number, year)
+                DO UPDATE SET
+                    revenue = EXCLUDED.revenue,
+                    miles = EXCLUDED.miles,
+                    revenue_per_mile = EXCLUDED.revenue_per_mile,
+                    revenue_per_truck = EXCLUDED.revenue_per_truck,
+                    utilization_pct = EXCLUDED.utilization_pct,
+                    yoy_change = EXCLUDED.yoy_change,
+                    num_trucks = EXCLUDED.num_trucks
+            """
+            execute_values(cur, insert_query, all_rows)
+            print(f"  Inserted {len(all_rows)} records into tfs_weekly")
+
+        # Delete processed files from OneDrive
+        print(f"\nDeleting {len(processed_files)} processed files from OneDrive...")
+        for file_info in processed_files:
+            try:
+                delete_file(file_info['id'])
+                print(f"  Deleted: {file_info['name']}")
+            except Exception as de:
+                print(f"  Warning: Could not delete {file_info['name']}: {de}")
+    else:
+        print(f"\nNo files to sync")
+
+    from zoneinfo import ZoneInfo
+    local_time = datetime.now(ZoneInfo('Africa/Johannesburg'))
+    last_sync = {'last_sync': local_time.isoformat(), 'had_data': len(all_rows) > 0}
+    with open(settings.TFS_LAST_SYNC_FILE, 'w') as f:
+        json.dump(last_sync, f)
+
+    return len(all_rows)
+
+
+def get_tfs_last_sync():
+    """Get the last TFS sync info"""
+    try:
+        with open(settings.TFS_LAST_SYNC_FILE, 'r') as f:
             data = json.load(f)
             if 'last_sync' in data:
                 dt = datetime.fromisoformat(data['last_sync'])

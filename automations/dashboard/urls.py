@@ -27,6 +27,9 @@ urlpatterns = [
     path('lcl/', views.lcl, name='lcl'),
     path('ord/', views.ord, name='ord'),
     path('dfw/', views.dfw, name='dfw'),
+    path('tfs/', views.tfs, name='tfs'),
+    path('tfs/sync/', views.sync_tfs, name='sync_tfs'),
+    path('tfs/sync/progress/', views.sync_tfs_progress, name='sync_tfs_progress'),
     path('ppg/', views.ppg, name='ppg'),
     path('creditor/', views.creditor, name='creditor'),
     path('condor-dor/', views.condor_dor, name='condor_dor'),
@@ -99,4 +102,7 @@ urlpatterns = [
     path('email-templates/get-schedules/', views.get_touchpoint_schedules, name='get_touchpoint_schedules'),
     path('planner/', views.planner, name='planner'),
     path('gantt/', views.gantt, name='gantt'),
+    path('automations/', views.automations_panel, name='automations_panel'),
+    path('automations/toggle/', views.automation_toggle, name='automation_toggle'),
+    path('automations/stop-emails/', views.automation_stop_all_emails, name='automation_stop_all_emails'),
 ]

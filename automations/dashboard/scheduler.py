@@ -413,9 +413,9 @@ def run_scheduled_touchpoints():
     today_str = today.strftime('%d-%m-%Y')
     logger.info(f"Checking scheduled touchpoints for {today_str}...")
 
-    # Don't send on Monday (0) or Friday (4)
-    if today.weekday() in (0, 4):
-        logger.info(f"Skipping touchpoint sends — today is {today.strftime('%A')} (no sends on Mon/Fri)")
+    # Don't send on Monday (0), Friday (4), Saturday (5), Sunday (6)
+    if today.weekday() in (0, 4, 5, 6):
+        logger.info(f"Skipping touchpoint sends — today is {today.strftime('%A')} (no sends on Mon/Fri/Sat/Sun)")
         return
 
     # Don't send on US public holidays
@@ -424,7 +424,7 @@ def run_scheduled_touchpoints():
         logger.info(f"Skipping touchpoint sends — today is a US public holiday")
         return
 
-    for tp_num in range(2, 11):
+    for tp_num in range(1, 11):
         # Check template exists (needed for email content)
         try:
             TouchpointTemplate.objects.get(touchpoint_number=tp_num)
@@ -788,22 +788,23 @@ def start_scheduler():
         replace_existing=True
     )
 
-    # DISABLED - Email touchpoints and bounce checking turned off
-    # scheduler.add_job(
-    #     run_scheduled_touchpoints,
-    #     trigger=IntervalTrigger(minutes=30),
-    #     id='scheduled_touchpoints',
-    #     name='Check and send scheduled touchpoints',
-    #     replace_existing=True
-    # )
+    # Check and send scheduled touchpoints every 5 minutes
+    scheduler.add_job(
+        run_scheduled_touchpoints,
+        trigger=IntervalTrigger(minutes=5),
+        id='scheduled_touchpoints',
+        name='Check and send scheduled touchpoints',
+        replace_existing=True
+    )
 
-    # scheduler.add_job(
-    #     check_bounce_emails,
-    #     trigger=IntervalTrigger(minutes=15),
-    #     id='bounce_check',
-    #     name='Check bounce emails and mark Undeliverable',
-    #     replace_existing=True
-    # )
+    # Check bounce emails every 15 minutes
+    scheduler.add_job(
+        check_bounce_emails,
+        trigger=IntervalTrigger(minutes=15),
+        id='bounce_check',
+        name='Check bounce emails and mark Undeliverable',
+        replace_existing=True
+    )
 
     # Refresh OneDrive token every minute to ensure it never expires
     scheduler.add_job(

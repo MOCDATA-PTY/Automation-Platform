@@ -79,6 +79,12 @@ LOGIN_URL = '/login/'
 # Set to None or remove to send to real recipients
 TEST_EMAIL_OVERRIDE = None
 
+# AWS SES settings
+AWS_SES_ACCESS_KEY_ID = 'AKIAWYY5J2ZMZ2F6BMUH'
+AWS_SES_SECRET_ACCESS_KEY = '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'
+AWS_SES_REGION = 'eu-west-1'
+AWS_SES_FROM_EMAIL = 'ethan.sevenster@moc-pty.com'
+
 GOOGLE_DRIVE_FOLDER_ID = '1xPGTc8320el4HXmZ3tNsHcavGtZ4asIY'
 GOOGLE_CLIENT_SECRET_FILE = str(BASE_DIR.parent / 'Turn over GABE tuesday update' / 'client_secret_929057555993-c86mkjhf08suobk6olcca6sgmudeg8l0.apps.googleusercontent.com.json')
 GOOGLE_TOKEN_FILE = str(BASE_DIR / 'token.json')
@@ -109,6 +115,7 @@ ONEDRIVE_DFW_FOLDER_PATH = '/Automation Platform/DFW Financial Analysis Report'
 ONEDRIVE_IMPORT_OPS_FOLDER_PATH = '/Automation Platform/Import Operational Report MOC'
 ONEDRIVE_WIP_ACCRUAL_FOLDER_PATH = '/Automation Platform/Wip And Accrual Report'
 ONEDRIVE_CONDOR_DOR_FOLDER_PATH = '/Automation Platform/Condor + Dor PNL'
+ONEDRIVE_TFS_FOLDER_PATH = '/Automation Platform/TFS Weekly Data'
 ONEDRIVE_TOKEN_FILE = str(BASE_DIR / 'onedrive_token.json')
 LAST_SYNC_FILE = str(BASE_DIR / 'last_sync.json')
 TURNOVER_LAST_SYNC_FILE = str(BASE_DIR / 'last_sync.json')
@@ -132,4 +139,5 @@ DFW_LAST_SYNC_FILE = str(BASE_DIR / 'dfw_last_sync.json')
 CONDOR_DOR_LAST_SYNC_FILE = str(BASE_DIR / 'condor_dor_last_sync.json')
 IMPORT_OPS_LAST_SYNC_FILE = str(BASE_DIR / 'import_ops_last_sync.json')
 WIP_ACCRUAL_LAST_SYNC_FILE = str(BASE_DIR / 'wip_accrual_last_sync.json')
+TFS_LAST_SYNC_FILE = str(BASE_DIR / 'tfs_last_sync.json')
 SYNC_HEALTH_FILE = str(BASE_DIR / 'sync_health.json')

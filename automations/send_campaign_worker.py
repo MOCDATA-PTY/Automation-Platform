@@ -26,10 +26,11 @@ django.setup()
 
 from datetime import datetime
 from django.conf import settings as django_settings
-import requests as http_requests
+import boto3
+from botocore.exceptions import ClientError
 
 from dashboard.models import USEUContact, TouchpointTemplate
-from dashboard.views import _get_graph_token, GRAPH_MAILBOX, update_touchpoint_progress
+from dashboard.views import update_touchpoint_progress, _ses_send_mail
 
 
 def _write_job_file(job_file, data):
@@ -78,27 +79,6 @@ def run_campaign(tp_num, job_id, job_file):
     _write_job_file(job_file, {'total': total, 'sent': 0, 'failed': 0, 'current': '', 'done': False, 'results': []})
     update_touchpoint_progress(tp_type, total=total, sent=0, failed=0, status='sending')
 
-    # Get token
-    token = _get_graph_token()
-    if not token:
-        print("[WORKER] Failed to get Graph API token", flush=True)
-        _write_job_file(job_file, {'total': total, 'sent': 0, 'failed': 0, 'current': 'Error: authentication failed', 'done': True, 'results': []})
-        update_touchpoint_progress(tp_type, status='idle')
-        return
-
-    # Token auto-refresh (tokens expire after 1 hour, refresh at 45 min)
-    token_lock = threading.Lock()
-    token_data = {'value': token, 'obtained': time.time()}
-
-    def _fresh_token():
-        with token_lock:
-            if time.time() - token_data['obtained'] > 2700:
-                new_tok = _get_graph_token()
-                if new_tok:
-                    token_data['value'] = new_tok
-                    token_data['obtained'] = time.time()
-            return token_data['value']
-
     # Build template body and attachments once (shared across all sends)
     body_content = template.body_html if template.body_html else template.body
     content_type = 'HTML' if template.body_html else 'Text'
@@ -115,7 +95,6 @@ def run_campaign(tp_num, job_id, job_file):
         if os.path.isfile(sig_path):
             with open(sig_path, 'rb') as sf:
                 sig_inline = {
-                    '@odata.type': '#microsoft.graph.fileAttachment',
                     'name': 'signature_waldo.png',
                     'contentType': 'image/png',
                     'contentBytes': base64.b64encode(sf.read()).decode('utf-8'),
@@ -134,7 +113,6 @@ def run_campaign(tp_num, job_id, job_file):
             att_name = name_part.replace('_', ' ').replace('-', ' ')
             att_name = ' '.join(att_name.split()) + ext
             att_data = {
-                '@odata.type': '#microsoft.graph.fileAttachment',
                 'name': att_name,
                 'contentBytes': base64.b64encode(att_bytes).decode('utf-8'),
             }
@@ -143,11 +121,9 @@ def run_campaign(tp_num, job_id, job_file):
 
     now_str = datetime.now().strftime('%d/%m/%Y')
     _progress_lock = threading.Lock()
-    _throttle = [4.0]  # 4s between emails = ~15/min (well under 30/min Graph limit)
     state = {'sent': 0, 'failed': 0}
-    DAILY_SEND_LIMIT = 2500  # Stay well under Microsoft's 10K/day limit
-    MINUTE_SEND_LIMIT = 25   # Stay under 30/min recipient rate limit
-    _minute_tracker = {'count': 0, 'window_start': time.time()}
+    DAILY_SEND_LIMIT = 50000  # SES production limit is much higher than Graph
+    SES_RATE_LIMIT = 14       # SES default is 14/sec, but we'll be conservative
     _stop_file = os.path.join(project_root, f'send_stop_{job_id}.signal')
     _stopped = {'value': False}
 
@@ -168,22 +144,8 @@ def run_campaign(tp_num, job_id, job_file):
                     print(f"[WORKER] Daily limit of {DAILY_SEND_LIMIT} reached. Stopping.", flush=True)
                     return
 
-            # ── Per-minute rate limit ──
-            with _progress_lock:
-                now = time.time()
-                elapsed = now - _minute_tracker['window_start']
-                if elapsed >= 60:
-                    _minute_tracker['count'] = 0
-                    _minute_tracker['window_start'] = now
-                if _minute_tracker['count'] >= MINUTE_SEND_LIMIT:
-                    wait_time = 60 - elapsed + 2  # wait until window resets + buffer
-                    print(f"[WORKER] Minute limit ({MINUTE_SEND_LIMIT}/min) reached, waiting {wait_time:.0f}s", flush=True)
-                    time.sleep(max(wait_time, 1))
-                    _minute_tracker['count'] = 0
-                    _minute_tracker['window_start'] = time.time()
-                _minute_tracker['count'] += 1
-
-            time.sleep(_throttle[0])
+            # Pace sends (SES allows ~14/sec but let's be safe)
+            time.sleep(0.1)
 
             with _progress_lock:
                 _write_job_file(job_file, {
@@ -194,7 +156,7 @@ def run_campaign(tp_num, job_id, job_file):
                     'done': False,
                     'results': [],
                 })
-            update_touchpoint_progress(tp_type, current_email=email_addr)
+            update_touchpoint_progress(tp_type, current_email=email_addr, status='sending')
 
             final_body = body_content
             final_body = final_body.replace('{{org_name}}', contact.org_name or '')
@@ -207,94 +169,49 @@ def run_campaign(tp_num, job_id, job_file):
             subject = subject.replace('{{org_name}}', contact.org_name or '')
             subject = subject.replace('{{contact_name}}', contact.contact_name or '')
 
-            current_token = _fresh_token()
-            payload = {
-                'message': {
-                    'subject': subject,
-                    'body': {'contentType': content_type, 'content': final_body},
-                    'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
-                    'toRecipients': [{'emailAddress': {'address': email_addr}}],
-                },
-                'saveToSentItems': True,
-            }
-            att_list = []
+            # Build attachments
+            attachments = []
             if att_data:
-                att_list.append(att_data)
+                attachments.append(att_data)
             if sig_inline:
-                att_list.append(sig_inline)
-            if att_list:
-                payload['message']['attachments'] = att_list
+                attachments.append(sig_inline)
+
+            body_html = final_body if content_type == 'HTML' else None
+            body_text = final_body if content_type == 'Text' else None
 
             print(f"[WORKER] Sending to: {email_addr}", flush=True)
-            sent_ok = False
-            _status = 0
-            _response_text = ''
-            _is_undeliverable = False
-
-            for attempt in range(5):
-                try:
-                    headers = {'Authorization': f'Bearer {current_token}', 'Content-Type': 'application/json'}
-                    r = http_requests.post(
-                        f'https://graph.microsoft.com/v1.0/users/{GRAPH_MAILBOX}/sendMail',
-                        headers=headers,
-                        json=payload,
-                        timeout=60
-                    )
-                    _status = r.status_code
-                    _response_text = r.text[:500] if r.text else ''
-                    if _status == 202:
-                        sent_ok = True
-                        break
-                    elif _status == 429:
-                        retry_after = int(r.headers.get('Retry-After', 10))
-                        print(f"[WORKER] 429 rate limit, waiting {retry_after}s", flush=True)
-                        time.sleep(retry_after + attempt * 5)
-                    elif _status == 403:
-                        err_lower = _response_text.lower()
-                        if 'quotaexceeded' in err_lower or 'cannot submit' in err_lower:
-                            print(f"[WORKER] QUOTA EXCEEDED — Microsoft blocked sending. Stopping campaign.", flush=True)
-                            _stopped['value'] = True
-                            return
-                        else:
-                            print(f"[WORKER] HTTP 403 for {email_addr}: {_response_text[:200]}", flush=True)
-                            break
-                    else:
-                        print(f"[WORKER] HTTP {_status} for {email_addr}: {_response_text[:200]}", flush=True)
-                        # Check if this is an undeliverable/invalid recipient error
-                        err_lower = _response_text.lower()
-                        if any(kw in err_lower for kw in [
-                            'invalidrecipients', 'mailboxnotfound', 'recipientnotfound',
-                            'undeliverable', 'does not exist', 'unknown recipient',
-                            'invalid recipient', 'mailbox unavailable', 'user not found',
-                        ]):
-                            _is_undeliverable = True
-                        break
-                except Exception as e:
-                    print(f"[WORKER] Request error for {email_addr}: {e}", flush=True)
-                    _status = 0
-                    time.sleep(3 * (attempt + 1))
-
-            # Keep throttle steady — do not speed up to avoid hitting limits
+            sent_ok, result_msg = _ses_send_mail(
+                to_address=email_addr,
+                subject=subject,
+                body_html=body_html,
+                body_text=body_text,
+                attachments=attachments if attachments else None,
+            )
 
             with _progress_lock:
-                if _is_undeliverable:
-                    # Mark contact as Undeliverable
-                    state['failed'] += 1
-                    contact.status = 'Undeliverable'
-                    setattr(contact, tp_sent_field, now_str)
-                    contact.save(update_fields=['status', tp_sent_field])
-                    print(f"[WORKER] Marked {email_addr} as Undeliverable", flush=True)
-                    update_touchpoint_progress(tp_type, failed=state['failed'])
-                elif sent_ok:
+                if not sent_ok:
+                    error_lower = result_msg.lower()
+                    if any(kw in error_lower for kw in [
+                        'mailboxdoesnotexist', 'mailbox does not exist',
+                        'addressnotverified', 'invalidparametervalue',
+                    ]):
+                        # Mark contact as Undeliverable
+                        state['failed'] += 1
+                        contact.status = 'Undeliverable'
+                        setattr(contact, tp_sent_field, now_str)
+                        contact.save(update_fields=['status', tp_sent_field])
+                        print(f"[WORKER] Marked {email_addr} as Undeliverable", flush=True)
+                        update_touchpoint_progress(tp_type, failed=state['failed'], status='sending')
+                    else:
+                        state['failed'] += 1
+                        print(f"[WORKER] FAILED {email_addr}: {result_msg}", flush=True)
+                        update_touchpoint_progress(tp_type, failed=state['failed'], status='sending')
+                else:
                     state['sent'] += 1
                     setattr(contact, tp_sent_field, now_str)
                     contact.last_touch = str(tp_num)
                     contact.save(update_fields=[tp_sent_field, 'last_touch'])
-                    update_touchpoint_progress(tp_type, sent=state['sent'])
-                else:
-                    state['failed'] += 1
-                    print(f"[WORKER] FAILED {email_addr} (HTTP {_status})", flush=True)
-                    update_touchpoint_progress(tp_type, failed=state['failed'])
+                    update_touchpoint_progress(tp_type, sent=state['sent'], status='sending')
 
         except Exception as e:
             print(f"[WORKER] Unhandled exception for {getattr(contact, 'email', '?')}: {e}", flush=True)

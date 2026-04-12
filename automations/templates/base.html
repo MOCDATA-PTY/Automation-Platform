@@ -378,6 +378,7 @@
             }
         }
 
+        @keyframes spin { to { transform: rotate(360deg); } }
         {% block extra_styles %}{% endblock %}
     </style>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -438,6 +439,14 @@
                         <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zm-5-7h-2v2H9v-2H7v-2h2V9h2v2h2v2z"/></svg>
                     </span>
                     <span class="label">US-EU List</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'automations_panel' %}" class="{% if request.resolver_match.url_name == 'automations_panel' %}active{% endif %}">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24"><path d="M13 2.05v2.02c3.95.49 7 3.85 7 7.93 0 1.45-.39 2.81-1.06 3.98l1.46 1.46C21.42 15.86 22 14 22 12c0-5.18-3.95-9.45-9-9.95zM12 19c-3.87 0-7-3.13-7-7 0-3.53 2.61-6.43 6-6.92V3.03c-4.06.5-7.21 3.86-7.96 7.97h2.02A7.003 7.003 0 0012 19c1.45 0 2.81-.39 3.98-1.06l-1.46-1.46A4.98 4.98 0 0112 19zm7-7h2c0 2-0.58 3.86-1.6 5.44l-1.46-1.46A7.05 7.05 0 0019 12zM8 12l4 4 4-4h-3V8h-2v4H8z"/></svg>
+                    </span>
+                    <span class="label">Automations</span>
                 </a>
             </li>
             <li>
@@ -586,20 +595,33 @@
                 
                 if (statusElement && data.status === 'sending') {
                     statusElement.style.display = 'block';
+                    const pct = data.total_contacts > 0 ? Math.round((actualSent / data.total_contacts) * 100) : 0;
                     statusElement.innerHTML = `
-                        <strong>📧 Sending ${currentTP.toUpperCase()}:</strong><br>
-                        📊 Sent ${actualSent} of ${data.total_contacts}<br>
-                        ${data.current_email ? `📨 Sending ${actualSent + 1} of ${data.total_contacts} — ${data.current_email}` : ''}
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                            <span style="display:inline-block;width:18px;height:18px;border:2.5px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite;"></span>
+                            <strong>Sending ${currentTP.toUpperCase()}...</strong>
+                            <span style="margin-left:auto;font-size:18px;font-weight:700;">${pct}%</span>
+                        </div>
+                        <div style="height:6px;background:rgba(255,255,255,0.2);border-radius:3px;overflow:hidden;margin-bottom:6px;">
+                            <div style="height:100%;width:${pct}%;background:#fff;border-radius:3px;transition:width 0.5s;"></div>
+                        </div>
+                        <div style="font-size:12px;opacity:0.9;">
+                            Sent <strong>${actualSent}</strong> of <strong>${data.total_contacts}</strong>
+                            ${data.current_email ? ` &mdash; ${data.current_email}` : ''}
+                        </div>
                     `;
                 } else if (statusElement && data.status === 'idle' && (data.sent_count > 0 || data.failed_count > 0)) {
                     statusElement.style.display = 'block';
+                    statusElement.style.background = 'linear-gradient(135deg, #1e7e34 0%, #28a745 100%)';
                     statusElement.innerHTML = `
-                        <strong>✅ ${currentTP.toUpperCase()} Complete:</strong><br>
-                        📊 Sent ${actualSent} of ${data.total_contacts}<br>
-                        <em>All emails dispatched successfully</em>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <span style="font-size:20px;">&#10003;</span>
+                            <strong>${currentTP.toUpperCase()} Complete</strong>
+                        </div>
+                        <div style="font-size:12px;opacity:0.9;margin-top:4px;">Sent <strong>${actualSent}</strong> of <strong>${data.total_contacts}</strong></div>
                     `;
                 } else if (statusElement) {
-                    console.log('Hiding status element, conditions not met'); // Debug log
+                    console.log('Hiding status element, conditions not met');
                     statusElement.style.display = 'none';
                 }
             })

@@ -18,6 +18,8 @@ import msal
 import requests as http_requests
 import base64
 import os
+import boto3
+from botocore.exceptions import ClientError
 import re
 import time
 from datetime import datetime
@@ -134,7 +136,8 @@ def data_analysis(request):
         'lax': 'lax_pnl', 'lcl': 'lcl_pnl', 'ord': 'ord_pnl',
         'dfw': 'dfw_pnl', 'condor_dor': 'condor_dor_pnl',
         'import_ops': 'import_ops', 'wip_accrual': 'wip_accrual',
-        'creditor': 'creditor_transactions'
+        'creditor': 'creditor_transactions',
+        'tfs': 'tfs_weekly',
     }
     station_rows = {}
     for key, table in station_tables.items():
@@ -175,6 +178,7 @@ def data_analysis(request):
         'condor_dor': 'condor_dor_last_sync.json',
         'import_ops': 'import_ops_last_sync.json',
         'wip_accrual': 'wip_accrual_last_sync.json',
+        'tfs': 'tfs_last_sync.json',
     }
     last_syncs = {}
     base_dir = os.path.dirname(os.path.dirname(__file__))
@@ -317,7 +321,6 @@ def sync_progress(request):
     return JsonResponse(get_progress())
 
 
-@login_required
 def onedrive_auth(request):
     """Redirect to OneDrive authorization"""
     auth_url = onedrive_sync.get_auth_url()
@@ -2017,6 +2020,9 @@ def useu_list(request):
     search = request.GET.get('search', '').strip()
 
     qs = contacts
+    status_filter = request.GET.get('status', '').strip()
+    if status_filter:
+        qs = qs.filter(status=status_filter)
     if search:
         from django.db.models import Q
         qs = qs.filter(
@@ -2094,6 +2100,11 @@ def useu_list(request):
             'is_sending': is_sending,
         })
 
+    # Status counts for filter badges
+    from django.db.models import Count
+    status_counts_qs = contacts.values('status').annotate(count=Count('id'))
+    status_counts = {s['status']: s['count'] for s in status_counts_qs}
+
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     return render(request, 'useu_list.html', {
         'rows_json': json.dumps([list(r) for r in rows]),
@@ -2102,6 +2113,7 @@ def useu_list(request):
         'active_count': active_count,
         'faulty_count': faulty_count,
         'tp_stats': tp_stats,
+        'status_counts': json.dumps(status_counts),
         'dark_mode': profile.dark_mode,
         'current_page': page,
         'per_page': per_page,
@@ -2464,10 +2476,17 @@ def stop_sending(request):
                     json.dump(jdata, jf)
         except Exception:
             pass
-        # Kill the worker process
+        # Kill the worker process (cross-platform)
         import subprocess
-        subprocess.Popen(['pkill', '-f', f'send_campaign_worker.*{job_id}'],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        import sys as _sys
+        if _sys.platform == 'win32':
+            subprocess.Popen(
+                ['taskkill', '/F', '/FI', f'WINDOWTITLE eq *{job_id}*'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=0x08000000,
+            )
+        else:
+            subprocess.Popen(['pkill', '-f', f'send_campaign_worker.*{job_id}'],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return JsonResponse({'ok': True, 'message': 'Stop signal sent'})
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=500)
@@ -2668,6 +2687,141 @@ def _get_graph_token():
     return result.get('access_token')
 
 
+# ── AWS SES Email Sending ─────────────────────────────────────────────────────
+
+def _get_ses_client():
+    """Create and return a boto3 SES client."""
+    return boto3.client(
+        'ses',
+        region_name=django_settings.AWS_SES_REGION,
+        aws_access_key_id=django_settings.AWS_SES_ACCESS_KEY_ID,
+        aws_secret_access_key=django_settings.AWS_SES_SECRET_ACCESS_KEY,
+    )
+
+
+def _ses_send_mail(to_address, subject, body_html=None, body_text=None,
+                   from_address=None, from_name='Magnum Opus Consultants',
+                   attachments=None, max_retries=3):
+    """Send an email via AWS SES. For emails with attachments, uses raw email.
+
+    Returns (success: bool, message_id_or_error: str).
+    """
+    if not from_address:
+        from_address = django_settings.AWS_SES_FROM_EMAIL
+
+    source = f'{from_name} <{from_address}>' if from_name else from_address
+
+    # If there are attachments, use raw email via SES send_raw_email
+    if attachments:
+        return _ses_send_raw_mail(
+            to_address, subject, body_html, body_text,
+            source, from_address, attachments, max_retries
+        )
+
+    # Simple email (no attachments)
+    ses = _get_ses_client()
+    body = {}
+    if body_html:
+        body['Html'] = {'Data': body_html, 'Charset': 'UTF-8'}
+    if body_text:
+        body['Text'] = {'Data': body_text, 'Charset': 'UTF-8'}
+    if not body:
+        body['Text'] = {'Data': '', 'Charset': 'UTF-8'}
+
+    for attempt in range(max_retries):
+        try:
+            response = ses.send_email(
+                Source=source,
+                Destination={'ToAddresses': [to_address]},
+                Message={
+                    'Subject': {'Data': subject, 'Charset': 'UTF-8'},
+                    'Body': body,
+                },
+            )
+            return True, response['MessageId']
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == 'Throttling':
+                time.sleep(2 * (attempt + 1))
+                continue
+            return False, f"{error_code}: {e.response['Error']['Message']}"
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(2 * (attempt + 1))
+                continue
+            return False, str(e)
+
+    return False, 'Max retries exceeded'
+
+
+def _ses_send_raw_mail(to_address, subject, body_html, body_text,
+                       source, from_address, attachments, max_retries=3):
+    """Send a raw MIME email via SES (supports attachments)."""
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.base import MIMEBase
+    from email.mime.image import MIMEImage
+    from email import encoders
+
+    msg = MIMEMultipart('mixed')
+    msg['Subject'] = subject
+    msg['From'] = source
+    msg['To'] = to_address
+
+    # Body part (prefer HTML)
+    if body_html:
+        # Use related for inline images
+        body_related = MIMEMultipart('related')
+        body_related.attach(MIMEText(body_html, 'html', 'utf-8'))
+
+        # Attach inline images (like signature)
+        for att in (attachments or []):
+            if att.get('isInline'):
+                content_bytes = base64.b64decode(att.get('contentBytes', ''))
+                img = MIMEImage(content_bytes)
+                img.add_header('Content-ID', f"<{att.get('contentId', '')}>")
+                img.add_header('Content-Disposition', 'inline', filename=att.get('name', 'image.png'))
+                body_related.attach(img)
+
+        msg.attach(body_related)
+    elif body_text:
+        msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
+
+    # Regular attachments (non-inline)
+    for att in (attachments or []):
+        if att.get('isInline'):
+            continue  # already handled above
+        content_bytes = base64.b64decode(att.get('contentBytes', ''))
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload(content_bytes)
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', 'attachment', filename=att.get('name', 'attachment'))
+        msg.attach(part)
+
+    ses = _get_ses_client()
+    for attempt in range(max_retries):
+        try:
+            response = ses.send_raw_email(
+                Source=from_address,
+                Destinations=[to_address],
+                RawMessage={'Data': msg.as_string()},
+            )
+            return True, response['MessageId']
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == 'Throttling':
+                time.sleep(2 * (attempt + 1))
+                continue
+            return False, f"{error_code}: {e.response['Error']['Message']}"
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(2 * (attempt + 1))
+                continue
+            return False, str(e)
+
+    return False, 'Max retries exceeded'
+
+
 def _graph_send_mail(token, payload, max_retries=5):
     """Send an email via Graph API with 429 throttle retry and large-attachment support.
 
@@ -2829,7 +2983,7 @@ def _graph_send_mail(token, payload, max_retries=5):
 
 @login_required
 def send_touchpoint(request):
-    """Send a touchpoint email to specific contacts via Microsoft Graph API."""
+    """Send a touchpoint email to specific contacts via AWS SES."""
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST required'}, status=405)
 
@@ -2849,15 +3003,6 @@ def send_touchpoint(request):
     except TouchpointTemplate.DoesNotExist:
         return JsonResponse({'ok': False, 'error': f'Template for TP{tp_num} not found'}, status=404)
 
-    token = _get_graph_token()
-    if not token:
-        return JsonResponse({'ok': False, 'error': 'Failed to get Graph API token'}, status=500)
-
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json',
-    }
-
     # Determine email body
     if template.body_html:
         body_content = template.body_html
@@ -2871,7 +3016,6 @@ def send_touchpoint(request):
     # Embed signature as inline CID attachment instead of external URL
     sig_inline = None
     if content_type == 'HTML':
-        import re
         body_content = re.sub(
             r'https://drive\.google\.com/thumbnail\?id=[^"\'&]+(?:&amp;[^"\']*|&[^"\']*)*',
             r'cid:signature_waldo',
@@ -2882,7 +3026,6 @@ def send_touchpoint(request):
         if os.path.isfile(sig_path):
             with open(sig_path, 'rb') as sf:
                 sig_inline = {
-                    '@odata.type': '#microsoft.graph.fileAttachment',
                     'name': 'signature_waldo.png',
                     'contentType': 'image/png',
                     'contentBytes': base64.b64encode(sf.read()).decode('utf-8'),
@@ -2917,21 +3060,6 @@ def send_touchpoint(request):
             subject = subject.replace('{{org_name}}', contact.org_name or '')
             subject = subject.replace('{{contact_name}}', contact.contact_name or '')
 
-        payload = {
-            'message': {
-                'subject': subject,
-                'body': {
-                    'contentType': content_type,
-                    'content': final_body,
-                },
-                'from': {'emailAddress': {'name': 'Magnum Opus Consultants', 'address': GRAPH_MAILBOX}},
-                'toRecipients': [
-                    {'emailAddress': {'address': email_addr}}
-                ],
-            },
-            'saveToSentItems': 'true',
-        }
-
         # Build attachments list
         attachments = []
         if template.attachment:
@@ -2944,7 +3072,6 @@ def send_touchpoint(request):
                 att_name = name_part.replace('_', ' ').replace('-', ' ')
                 att_name = ' '.join(att_name.split()) + ext
                 attachments.append({
-                    '@odata.type': '#microsoft.graph.fileAttachment',
                     'name': att_name,
                     'contentBytes': base64.b64encode(att_bytes).decode('utf-8'),
                 })
@@ -2952,15 +3079,22 @@ def send_touchpoint(request):
                 pass
         if sig_inline:
             attachments.append(sig_inline)
-        if attachments:
-            payload['message']['attachments'] = attachments
 
-        sent_ok, status_code = _graph_send_mail(token, payload)
-        results.append({'email': email_addr, 'ok': sent_ok, 'status': status_code})
+        # Send via AWS SES
+        body_html = final_body if content_type == 'HTML' else None
+        body_text = final_body if content_type == 'Text' else None
+        sent_ok, msg_id = _ses_send_mail(
+            to_address=email_addr,
+            subject=subject,
+            body_html=body_html,
+            body_text=body_text,
+            attachments=attachments if attachments else None,
+        )
+        results.append({'email': email_addr, 'ok': sent_ok, 'status': msg_id})
 
-        # Pace sends to avoid Graph API throttling (~7 MB per email)
+        # Pace sends
         if sent_ok:
-            time.sleep(2)
+            time.sleep(0.1)
 
         # Update contact record if sent successfully
         if sent_ok and contact:
@@ -2975,23 +3109,28 @@ def send_touchpoint(request):
 
 # Touchpoint Progress Tracking
 def update_touchpoint_progress(tp_type, total=None, sent=None, failed=None, current_email="", status="idle"):
-    """Update touchpoint sending progress"""
+    """Update touchpoint sending progress (atomic write to prevent corruption)."""
     import json
     import os
+    import tempfile
     from datetime import datetime
-    
+
     progress_file = os.path.join(os.path.dirname(__file__), '..', 'touchpoint_progress.json')
-    
+
     try:
         if os.path.exists(progress_file):
             with open(progress_file, 'r') as f:
-                progress = json.load(f)
+                raw = f.read().strip()
+                # Fix double-brace corruption if present
+                while raw.endswith('}}') and not raw.endswith('"}}'):
+                    raw = raw[:-1]
+                progress = json.loads(raw) if raw else {}
         else:
             progress = {}
-        
+
         if tp_type not in progress:
             progress[tp_type] = {}
-        
+
         # Update provided values
         if total is not None:
             progress[tp_type]['total_contacts'] = total
@@ -3001,17 +3140,28 @@ def update_touchpoint_progress(tp_type, total=None, sent=None, failed=None, curr
             progress[tp_type]['failed_count'] = failed
         if current_email:
             progress[tp_type]['current_email'] = current_email
-        
+
         progress[tp_type]['status'] = status
         progress[tp_type]['last_updated'] = datetime.now().isoformat()
-        
+
         if status == "sending" and 'started_at' not in progress[tp_type]:
             progress[tp_type]['started_at'] = datetime.now().isoformat()
         elif status == "idle":
             progress[tp_type]['started_at'] = None
-            
-        with open(progress_file, 'w') as f:
-            json.dump(progress, f, indent=2)
+
+        # Atomic write: write to temp file then rename
+        dir_name = os.path.dirname(progress_file)
+        fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump(progress, f, indent=2)
+            os.replace(tmp_path, progress_file)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
     except Exception as e:
         print(f"Error updating touchpoint progress: {e}")
 
@@ -3289,3 +3439,185 @@ def gantt(request):
         'tasks_json': _json.dumps(tasks_data),
         'has_tasks': bool(tasks_data),
     })
+
+
+# ── TFS Weekly Data ──────────────────────────────────────────────────────────
+
+@login_required
+def tfs(request):
+    """TFS Weekly Data page"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM tfs_weekly")
+            total_records = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT year) FROM tfs_weekly")
+            year_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(DISTINCT week_number) FROM tfs_weekly")
+            week_count = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COALESCE(SUM(revenue), 0) FROM tfs_weekly WHERE year = (SELECT MAX(year) FROM tfs_weekly)")
+            ytd_revenue = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT MAX(num_trucks) FROM tfs_weekly")
+            num_trucks = cursor.fetchone()[0] or 32
+            cursor.execute("SELECT AVG(utilization_pct) FROM tfs_weekly WHERE utilization_pct IS NOT NULL")
+            avg_util = cursor.fetchone()[0]
+            avg_util = float(avg_util) * 100 if avg_util else 0
+    except:
+        total_records = year_count = week_count = 0
+        ytd_revenue = 0
+        num_trucks = 32
+        avg_util = 0
+
+    last_sync = onedrive_sync.get_tfs_last_sync()
+
+    return render(request, 'tfs.html', {
+        'total_records': total_records,
+        'year_count': year_count,
+        'week_count': week_count,
+        'ytd_revenue': f"{ytd_revenue:,.2f}",
+        'num_trucks': num_trucks,
+        'avg_util': f"{avg_util:.1f}",
+        'last_sync': last_sync,
+    })
+
+
+tfs_sync_progress = {'status': 'idle', 'message': '', 'current': 0, 'total': 0}
+
+
+def update_tfs_progress(status, message, current=0, total=0):
+    global tfs_sync_progress
+    tfs_sync_progress = {
+        'status': status,
+        'message': message,
+        'current': current,
+        'total': total,
+    }
+
+
+@login_required
+def sync_tfs(request):
+    """Sync TFS data from OneDrive"""
+    if request.method == 'POST':
+        if not onedrive_sync.get_access_token():
+            return JsonResponse({'status': 'error', 'message': 'OneDrive not connected'})
+
+        update_tfs_progress('starting', 'Starting TFS sync...', 0, 100)
+
+        def run_sync():
+            try:
+                update_tfs_progress('syncing', 'Checking OneDrive for TFS files...', 10, 100)
+                count = onedrive_sync.sync_tfs_data()
+                if count > 0:
+                    update_tfs_progress('complete', f'Synced {count} records', 100, 100)
+                else:
+                    update_tfs_progress('complete', 'No files to sync', 100, 100)
+            except Exception as e:
+                update_tfs_progress('error', f'Error: {str(e)}', 0, 100)
+
+        import threading
+        threading.Thread(target=run_sync, daemon=True).start()
+        return JsonResponse({'status': 'started'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+@login_required
+def sync_tfs_progress(request):
+    """Get TFS sync progress"""
+    return JsonResponse(tfs_sync_progress)
+
+
+@login_required
+def automations_panel(request):
+    """Automations control panel — toggle, pause, and manage scheduled jobs."""
+    from .scheduler import scheduler as bg_scheduler
+
+    jobs_data = []
+    if bg_scheduler:
+        for job in bg_scheduler.get_jobs():
+            next_run = job.next_run_time
+            jobs_data.append({
+                'id': job.id,
+                'name': job.name,
+                'next_run': next_run.strftime('%Y-%m-%d %H:%M:%S') if next_run else 'Paused',
+                'is_paused': next_run is None,
+                'trigger': str(job.trigger),
+            })
+
+    # Categorize jobs
+    email_jobs = [j for j in jobs_data if j['id'] in ('scheduled_touchpoints', 'bounce_check')]
+    sync_jobs = [j for j in jobs_data if j['id'].endswith('_sync')]
+    system_jobs = [j for j in jobs_data if j['id'] not in [ej['id'] for ej in email_jobs] and j['id'] not in [sj['id'] for sj in sync_jobs]]
+
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    return render(request, 'automations_panel.html', {
+        'email_jobs': email_jobs,
+        'sync_jobs': sync_jobs,
+        'system_jobs': system_jobs,
+        'total_jobs': len(jobs_data),
+        'dark_mode': profile.dark_mode,
+    })
+
+
+@login_required
+def automation_toggle(request):
+    """Pause or resume a scheduled job."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST required'}, status=405)
+    from .scheduler import scheduler as bg_scheduler
+    if not bg_scheduler:
+        return JsonResponse({'ok': False, 'error': 'Scheduler not running'}, status=500)
+
+    data = json.loads(request.body)
+    job_id = data.get('job_id', '')
+    action = data.get('action', '')  # 'pause', 'resume', 'remove', 'run_now'
+
+    try:
+        job = bg_scheduler.get_job(job_id)
+        if not job:
+            return JsonResponse({'ok': False, 'error': f'Job {job_id} not found'}, status=404)
+
+        if action == 'pause':
+            job.pause()
+            return JsonResponse({'ok': True, 'status': 'paused'})
+        elif action == 'resume':
+            job.resume()
+            return JsonResponse({'ok': True, 'status': 'resumed'})
+        elif action == 'remove':
+            bg_scheduler.remove_job(job_id)
+            return JsonResponse({'ok': True, 'status': 'removed'})
+        elif action == 'run_now':
+            job.func()
+            return JsonResponse({'ok': True, 'status': 'executed'})
+        else:
+            return JsonResponse({'ok': False, 'error': 'Invalid action'}, status=400)
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+
+
+@login_required
+def automation_stop_all_emails(request):
+    """Stop all email-related automation jobs."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST required'}, status=405)
+    from .scheduler import scheduler as bg_scheduler
+    if not bg_scheduler:
+        return JsonResponse({'ok': False, 'error': 'Scheduler not running'}, status=500)
+
+    stopped = []
+    for job_id in ('scheduled_touchpoints', 'bounce_check'):
+        job = bg_scheduler.get_job(job_id)
+        if job:
+            job.pause()
+            stopped.append(job_id)
+
+    # Also kill any running campaign workers
+    import subprocess
+    import sys as _sys
+    if _sys.platform == 'win32':
+        subprocess.Popen(['taskkill', '/F', '/FI', 'WINDOWTITLE eq *send_campaign*'],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=0x08000000)
+    else:
+        subprocess.Popen(['pkill', '-f', 'send_campaign_worker'],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    return JsonResponse({'ok': True, 'stopped': stopped})

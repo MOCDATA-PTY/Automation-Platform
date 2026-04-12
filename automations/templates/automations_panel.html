@@ -1,0 +1,227 @@
+{% extends 'base.html' %}
+
+{% block title %}Automations Panel{% endblock %}
+
+{% block extra_styles %}
+.auto-page { padding: 24px; }
+.auto-header { margin-bottom: 24px; }
+.auto-header h1 { font-size: 22px; font-weight: 700; color: var(--text-primary); margin: 0 0 4px; }
+.auto-header p { font-size: 13px; color: var(--text-secondary); margin: 0; }
+
+.auto-actions { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+.auto-btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.auto-btn-danger { background: #dc3545; color: #fff; }
+.auto-btn-danger:hover { background: #c82333; }
+.auto-btn-success { background: #28a745; color: #fff; }
+.auto-btn-success:hover { background: #1e7e34; }
+.auto-btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-primary); }
+.auto-btn-outline:hover { background: var(--surface2, #f5f5f5); }
+
+.auto-section { margin-bottom: 28px; }
+.auto-section-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.auto-section-title .badge { font-size: 11px; background: #054B70; color: #fff; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+
+.auto-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.auto-row { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); gap: 12px; transition: background 0.15s; }
+.auto-row:last-child { border-bottom: none; }
+.auto-row:hover { background: var(--surface2, rgba(5,75,112,0.03)); }
+
+.auto-row-info { flex: 1; min-width: 0; }
+.auto-row-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.auto-row-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+.auto-status { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.auto-status-active { background: #d4edda; color: #155724; }
+.auto-status-paused { background: #fff3cd; color: #856404; }
+
+[data-theme="dark"] .auto-status-active { background: #1b3a1b; color: #6fcf6f; }
+[data-theme="dark"] .auto-status-paused { background: #3a3a1b; color: #cfcf6f; }
+
+.auto-row-actions { display: flex; gap: 6px; }
+.auto-row-actions button { padding: 5px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 11px; cursor: pointer; background: var(--surface); color: var(--text-primary); transition: all 0.15s; }
+.auto-row-actions button:hover { background: var(--surface2, #f0f0f0); }
+.auto-row-actions .btn-pause { border-color: #ffc107; color: #856404; }
+.auto-row-actions .btn-pause:hover { background: #fff3cd; }
+.auto-row-actions .btn-resume { border-color: #28a745; color: #155724; }
+.auto-row-actions .btn-resume:hover { background: #d4edda; }
+.auto-row-actions .btn-run { border-color: #054B70; color: #054B70; }
+.auto-row-actions .btn-run:hover { background: rgba(5,75,112,0.08); }
+.auto-row-actions .btn-remove { border-color: #dc3545; color: #dc3545; }
+.auto-row-actions .btn-remove:hover { background: #fdecea; }
+
+.auto-empty { padding: 24px; text-align: center; color: var(--text-secondary); font-size: 13px; }
+
+.toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; color: #fff; z-index: 9999; opacity: 0; transform: translateY(10px); transition: all 0.3s; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast-success { background: #28a745; }
+.toast-error { background: #dc3545; }
+{% endblock %}
+
+{% block content %}
+<div class="auto-page">
+    <div class="auto-header">
+        <h1>Automations</h1>
+        <p>Manage scheduled jobs, email campaigns, and data syncs. {{ total_jobs }} automations running.</p>
+    </div>
+
+    <div class="auto-actions">
+        <button class="auto-btn auto-btn-danger" onclick="stopAllEmails()">Stop All Email Sending</button>
+        <button class="auto-btn auto-btn-success" onclick="resumeAllEmails()">Resume Email Sending</button>
+        <button class="auto-btn auto-btn-outline" onclick="location.reload()">Refresh Status</button>
+    </div>
+
+    <!-- Email Automations -->
+    <div class="auto-section">
+        <div class="auto-section-title">
+            Email Automations <span class="badge">{{ email_jobs|length }}</span>
+        </div>
+        <div class="auto-card">
+            {% for job in email_jobs %}
+            <div class="auto-row" data-job-id="{{ job.id }}">
+                <div class="auto-row-info">
+                    <div class="auto-row-name">{{ job.name }}</div>
+                    <div class="auto-row-meta">ID: {{ job.id }} &mdash; {{ job.trigger }} &mdash; Next: {{ job.next_run }}</div>
+                </div>
+                <span class="auto-status {% if job.is_paused %}auto-status-paused{% else %}auto-status-active{% endif %}">
+                    {% if job.is_paused %}Paused{% else %}Active{% endif %}
+                </span>
+                <div class="auto-row-actions">
+                    {% if job.is_paused %}
+                    <button class="btn-resume" onclick="toggleJob('{{ job.id }}', 'resume')">Resume</button>
+                    {% else %}
+                    <button class="btn-pause" onclick="toggleJob('{{ job.id }}', 'pause')">Pause</button>
+                    {% endif %}
+                    <button class="btn-run" onclick="toggleJob('{{ job.id }}', 'run_now')">Run Now</button>
+                    <button class="btn-remove" onclick="removeJob('{{ job.id }}', '{{ job.name }}')">Remove</button>
+                </div>
+            </div>
+            {% empty %}
+            <div class="auto-empty">No email automations configured.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Data Sync Automations -->
+    <div class="auto-section">
+        <div class="auto-section-title">
+            Data Sync Automations <span class="badge">{{ sync_jobs|length }}</span>
+        </div>
+        <div class="auto-card">
+            {% for job in sync_jobs %}
+            <div class="auto-row" data-job-id="{{ job.id }}">
+                <div class="auto-row-info">
+                    <div class="auto-row-name">{{ job.name }}</div>
+                    <div class="auto-row-meta">ID: {{ job.id }} &mdash; {{ job.trigger }} &mdash; Next: {{ job.next_run }}</div>
+                </div>
+                <span class="auto-status {% if job.is_paused %}auto-status-paused{% else %}auto-status-active{% endif %}">
+                    {% if job.is_paused %}Paused{% else %}Active{% endif %}
+                </span>
+                <div class="auto-row-actions">
+                    {% if job.is_paused %}
+                    <button class="btn-resume" onclick="toggleJob('{{ job.id }}', 'resume')">Resume</button>
+                    {% else %}
+                    <button class="btn-pause" onclick="toggleJob('{{ job.id }}', 'pause')">Pause</button>
+                    {% endif %}
+                    <button class="btn-run" onclick="toggleJob('{{ job.id }}', 'run_now')">Run Now</button>
+                    <button class="btn-remove" onclick="removeJob('{{ job.id }}', '{{ job.name }}')">Remove</button>
+                </div>
+            </div>
+            {% empty %}
+            <div class="auto-empty">No data sync automations configured.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- System Automations -->
+    {% if system_jobs %}
+    <div class="auto-section">
+        <div class="auto-section-title">
+            System <span class="badge">{{ system_jobs|length }}</span>
+        </div>
+        <div class="auto-card">
+            {% for job in system_jobs %}
+            <div class="auto-row" data-job-id="{{ job.id }}">
+                <div class="auto-row-info">
+                    <div class="auto-row-name">{{ job.name }}</div>
+                    <div class="auto-row-meta">ID: {{ job.id }} &mdash; {{ job.trigger }} &mdash; Next: {{ job.next_run }}</div>
+                </div>
+                <span class="auto-status {% if job.is_paused %}auto-status-paused{% else %}auto-status-active{% endif %}">
+                    {% if job.is_paused %}Paused{% else %}Active{% endif %}
+                </span>
+                <div class="auto-row-actions">
+                    {% if job.is_paused %}
+                    <button class="btn-resume" onclick="toggleJob('{{ job.id }}', 'resume')">Resume</button>
+                    {% else %}
+                    <button class="btn-pause" onclick="toggleJob('{{ job.id }}', 'pause')">Pause</button>
+                    {% endif %}
+                    <button class="btn-run" onclick="toggleJob('{{ job.id }}', 'run_now')">Run Now</button>
+                    <button class="btn-remove" onclick="removeJob('{{ job.id }}', '{{ job.name }}')">Remove</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const CSRF = '{{ csrf_token }}';
+
+function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast toast-' + type + ' show';
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function toggleJob(jobId, action) {
+    fetch('{% url "automation_toggle" %}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        body: JSON.stringify({job_id: jobId, action: action})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            showToast(jobId + ' ' + data.status, 'success');
+            setTimeout(() => location.reload(), 800);
+        } else {
+            showToast('Error: ' + data.error, 'error');
+        }
+    })
+    .catch(() => showToast('Network error', 'error'));
+}
+
+function removeJob(jobId, jobName) {
+    if (!confirm('Remove "' + jobName + '"? This will stop the automation until the server restarts.')) return;
+    toggleJob(jobId, 'remove');
+}
+
+function stopAllEmails() {
+    if (!confirm('Stop ALL email sending? This pauses scheduled touchpoints and bounce checking.')) return;
+    fetch('{% url "automation_stop_all_emails" %}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        body: '{}'
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            showToast('All email automations stopped', 'success');
+            setTimeout(() => location.reload(), 800);
+        } else {
+            showToast('Error: ' + data.error, 'error');
+        }
+    })
+    .catch(() => showToast('Network error', 'error'));
+}
+
+function resumeAllEmails() {
+    ['scheduled_touchpoints', 'bounce_check'].forEach(id => {
+        toggleJob(id, 'resume');
+    });
+}
+</script>
+{% endblock %}
